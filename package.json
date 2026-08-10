@@ -1,0 +1,77 @@
+{
+  "name": "@thm-health/vue-profile-image-cropper",
+  "version": "0.1.0",
+  "description": "Unstyled Vue 3 circular profile image cropper",
+  "type": "module",
+  "main": "./dist/vue-profile-image-cropper.js",
+  "module": "./dist/vue-profile-image-cropper.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/vue-profile-image-cropper.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --mode lib",
+    "build:demo": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b --pretty false",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "test:e2e": "start-server-and-test dev http://127.0.0.1:5173 cy:run",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build"
+  },
+  "keywords": [
+    "vue",
+    "vue3",
+    "cropper",
+    "image",
+    "avatar",
+    "canvas",
+    "profile"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/pngjs": "^6.0.5",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vue/test-utils": "^2.4.11",
+    "@vue/tsconfig": "^0.9.1",
+    "cypress": "^15.20.0",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.9.0",
+    "happy-dom": "^20.11.2",
+    "pixelmatch": "^7.2.0",
+    "pngjs": "^7.0.0",
+    "prettier": "^3.9.6",
+    "start-server-and-test": "^3.0.12",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.66.0",
+    "vite": "^8.2.0",
+    "vite-plugin-dts": "^5.0.3",
+    "vitest": "^4.1.10",
+    "vue": "^3.5.41",
+    "vue-tsc": "^3.3.8"
+  }
+}
