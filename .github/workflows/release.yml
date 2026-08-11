@@ -1,4 +1,4 @@
-name: Release
+name: Release + Publish
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ on:
         type: string
 
 permissions:
+  id-token: write # Required for OIDC
   contents: write
 
 concurrency:
@@ -16,10 +17,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Bump version, commit, and tag
+  release-and-publish:
+    name: Bump version, commit/tag, and publish to npm
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -27,12 +28,14 @@ jobs:
         with:
           # Release from the branch selected in the Actions UI (usually main).
           ref: ${{ github.ref }}
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
-          cache: npm
+          node-version: 24
+          package-manager-cache: false
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Configure git
         run: |
@@ -63,5 +66,14 @@ jobs:
           # Updates package.json + package-lock.json, commits, and creates v* tag.
           npm version "$VERSION" -m "chore: release v%s"
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run checks
+        run: npm run check
+
       - name: Push commit and tag
-        run: git push origin "HEAD:${{ github.ref_name }}" --follow-tags
+        run: git push --atomic origin "HEAD:${{ github.ref_name }}" "$(git describe --tags --exact-match HEAD)"
+
+      - name: Publish to npm
+        run: npm publish
