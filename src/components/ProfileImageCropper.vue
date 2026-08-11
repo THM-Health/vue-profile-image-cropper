@@ -21,6 +21,8 @@ import {
   clampOffset,
   getCenteredOffset,
   getCoverScale,
+  getCropOrigin,
+  getCropPositionPercent,
   getDisplaySize,
   getSourceCropRect,
   reanchorOffsetAfterZoom,
@@ -29,6 +31,13 @@ import {
 export interface CropResult {
   blob: Blob
   dataURL: string
+}
+
+export interface CropPosition {
+  /** 0 at left limit, 100 at right limit. `null` when X cannot be panned. */
+  x: number | null
+  /** 0 at top limit, 100 at bottom limit. `null` when Y cannot be panned. */
+  y: number | null
 }
 
 defineOptions({ inheritAttrs: false })
@@ -67,6 +76,7 @@ const props = withDefaults(
     keyboardStepLarge: 32,
     ariaLabel:
       'Image crop area. Drag or use arrow keys to reposition the image under the circular mask.',
+    ariaRoleDescription: 'Image cropper',
     rootClass: undefined,
     viewportClass: undefined,
     stageClass: undefined,
@@ -82,6 +92,8 @@ const emit = defineEmits<{
   ready: []
   crop: [result: CropResult]
   error: [message: string]
+  /** Fired when the relative crop position changes (0–100 on each axis). */
+  position: [position: CropPosition]
 }>()
 
 const attrs = useAttrs()
@@ -98,11 +110,14 @@ const loadToken = ref(0)
 const readyEmittedForToken = ref(0)
 const ready = computed(() => imageEl.value !== null && sourceW.value > 0)
 
-const viewportSize = ref(0)
+const viewportWidth = ref(0)
+const viewportHeight = ref(0)
 const offsetX = ref(0)
 const offsetY = ref(0)
 
-const coverScale = computed(() => getCoverScale(sourceW.value, sourceH.value, viewportSize.value))
+const coverScale = computed(() =>
+  getCoverScale(sourceW.value, sourceH.value, viewportWidth.value, viewportHeight.value),
+)
 
 const display = computed(() =>
   getDisplaySize(sourceW.value, sourceH.value, coverScale.value, props.zoom),
@@ -110,12 +125,24 @@ const display = computed(() =>
 const displayScale = computed(() => display.value.scale)
 const displayW = computed(() => display.value.width)
 const displayH = computed(() => display.value.height)
+const cropOrigin = computed(() => getCropOrigin(viewportWidth.value, viewportHeight.value))
+const cropPosition = computed(() =>
+  getCropPositionPercent(
+    offsetX.value,
+    offsetY.value,
+    viewportWidth.value,
+    viewportHeight.value,
+    displayW.value,
+    displayH.value,
+  ),
+)
 
 function clampOffsets(): void {
   const next = clampOffset(
     offsetX.value,
     offsetY.value,
-    viewportSize.value,
+    viewportWidth.value,
+    viewportHeight.value,
     displayW.value,
     displayH.value,
   )
@@ -124,7 +151,12 @@ function clampOffsets(): void {
 }
 
 function centerImage(): void {
-  const next = getCenteredOffset(viewportSize.value, displayW.value, displayH.value)
+  const next = getCenteredOffset(
+    viewportWidth.value,
+    viewportHeight.value,
+    displayW.value,
+    displayH.value,
+  )
   offsetX.value = next.x
   offsetY.value = next.y
 }
@@ -133,7 +165,8 @@ function reanchorAfterZoom(prevZoom: number, nextZoom: number): void {
   const next = reanchorOffsetAfterZoom(
     offsetX.value,
     offsetY.value,
-    viewportSize.value,
+    viewportWidth.value,
+    viewportHeight.value,
     prevZoom,
     nextZoom,
     displayW.value,
@@ -154,6 +187,15 @@ function applyImageTransform(): void {
 watch([offsetX, offsetY, displayW, displayH], () => {
   applyImageTransform()
 })
+
+watch(
+  cropPosition,
+  (position) => {
+    if (!ready.value || viewportWidth.value <= 0 || viewportHeight.value <= 0) return
+    emit('position', { x: position.x, y: position.y })
+  },
+  { deep: true },
+)
 
 watch(
   () => props.zoom,
@@ -179,11 +221,12 @@ function resetState(): void {
   sourceH.value = 0
   offsetX.value = 0
   offsetY.value = 0
-  viewportSize.value = 0
+  viewportWidth.value = 0
+  viewportHeight.value = 0
 }
 
 function emitReadyIfNeeded(): void {
-  if (!ready.value || viewportSize.value <= 0) return
+  if (!ready.value || viewportWidth.value <= 0 || viewportHeight.value <= 0) return
   if (readyEmittedForToken.value === loadToken.value) return
   readyEmittedForToken.value = loadToken.value
   emit('ready')
@@ -278,20 +321,22 @@ function measureViewport(): void {
   const el = viewportRef.value
   if (!el) return
   // Use the laid-out content box; avoid flooring so export matches the visible area.
-  const size = Math.min(el.clientWidth, el.clientHeight)
-  if (size <= 0) return
+  const width = el.clientWidth
+  const height = el.clientHeight
+  if (width <= 0 || height <= 0) return
 
-  const prev = viewportSize.value
-  viewportSize.value = size
+  const prevW = viewportWidth.value
+  const prevH = viewportHeight.value
+  viewportWidth.value = width
+  viewportHeight.value = height
 
   if (!ready.value) return
 
-  if (prev > 0 && prev !== size) {
-    const sx = size / prev
-    offsetX.value *= sx
-    offsetY.value *= sx
+  if (prevW > 0 && prevH > 0 && (prevW !== width || prevH !== height)) {
+    offsetX.value *= width / prevW
+    offsetY.value *= height / prevH
     clampOffsets()
-  } else if (prev === 0) {
+  } else if (prevW === 0 || prevH === 0) {
     centerImage()
   } else {
     clampOffsets()
@@ -418,7 +463,7 @@ function blobToDataURL(blob: Blob): Promise<string> {
 
 async function cropImage(): Promise<CropResult | null> {
   const img = imageEl.value
-  if (!img || !viewportSize.value || !displayScale.value) {
+  if (!img || !viewportWidth.value || !viewportHeight.value || !displayScale.value) {
     emit('error', 'Image is not ready to crop.')
     return null
   }
@@ -427,7 +472,8 @@ async function cropImage(): Promise<CropResult | null> {
   const rect = getSourceCropRect(
     offsetX.value,
     offsetY.value,
-    viewportSize.value,
+    viewportWidth.value,
+    viewportHeight.value,
     scale,
     sourceW.value,
     sourceH.value,
@@ -473,7 +519,10 @@ defineExpose({
   getCropState: () => ({
     offsetX: offsetX.value,
     offsetY: offsetY.value,
-    viewportSize: viewportSize.value,
+    viewportWidth: viewportWidth.value,
+    viewportHeight: viewportHeight.value,
+    cropSize: cropOrigin.value.size,
+    position: { ...cropPosition.value },
     zoom: props.zoom,
     sourceW: sourceW.value,
     sourceH: sourceH.value,
@@ -492,7 +541,6 @@ defineExpose({
       role="application"
       tabindex="0"
       :aria-label="ariaLabel"
-      aria-roledescription="cropper"
       :data-dragging="isDragging ? 'true' : 'false'"
       :style="{
         position: 'relative',
@@ -544,7 +592,10 @@ defineExpose({
           :class="maskClass"
           :style="{
             position: 'absolute',
-            inset: '0',
+            left: `${cropOrigin.x}px`,
+            top: `${cropOrigin.y}px`,
+            width: `${cropOrigin.size}px`,
+            height: `${cropOrigin.size}px`,
             borderRadius: '50%',
             pointerEvents: 'none',
           }"
@@ -553,7 +604,10 @@ defineExpose({
           :class="ringClass"
           :style="{
             position: 'absolute',
-            inset: '0',
+            left: `${cropOrigin.x}px`,
+            top: `${cropOrigin.y}px`,
+            width: `${cropOrigin.size}px`,
+            height: `${cropOrigin.size}px`,
             borderRadius: '50%',
             pointerEvents: 'none',
           }"

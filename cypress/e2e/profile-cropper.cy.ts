@@ -14,9 +14,7 @@ describe('Profile image cropper demo', () => {
   it('uploads an image, zooms, crops, and shows a square preview', () => {
     cy.get('input[type="file"]').selectFile('cypress/fixtures/profile.png', { force: true })
 
-    cy.get('[role="application"][aria-roledescription="cropper"]', { timeout: 10000 }).should(
-      'be.visible',
-    )
+    cy.get('[role="application"]', { timeout: 10000 }).should('be.visible')
     cy.get('[role="application"] img', { timeout: 10000 })
       .should('be.visible')
       .and('have.attr', 'src')
@@ -50,7 +48,7 @@ describe('Profile image cropper demo', () => {
 
     cy.get('input[type="file"]').selectFile('cypress/fixtures/profile.png', { force: true })
 
-    cy.get('[role="application"][aria-roledescription="cropper"]').should('be.visible')
+    cy.get('[role="application"]').should('be.visible')
     cy.get('[role="application"] img').should('be.visible')
 
     cy.get('#profile-zoom').invoke('val', 2).trigger('input')

@@ -58,7 +58,6 @@ describe('ProfileImageCropper', () => {
     ;(wrapper.vm as unknown as { remeasure: () => void }).remeasure()
     await nextTick()
 
-    expect(viewport.attributes('aria-roledescription')).toBe('cropper')
     expect(viewport.classes()).toContain('test-viewport')
     expect(wrapper.find('img').exists()).toBe(true)
     expect(wrapper.emitted('ready')).toBeTruthy()

@@ -25,7 +25,7 @@ const quality = 1
 const keyboardStep = 8
 const rootClass = 'w-full max-w-md'
 const viewportClass =
-  'aspect-square w-full rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]'
+  'h-[200px] w-full max-h-[200px] rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]'
 
 function openFilePicker(): void {
   fileInputRef.value?.click()
@@ -159,7 +159,7 @@ async function downloadCropped(): Promise<void> {
 
         <div
           v-if="!selectedImage"
-          class="grid aspect-square w-full max-w-md place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-100 p-6 text-center text-[0.95rem] leading-snug text-slate-500"
+          class="grid h-[200px] w-full max-h-[200px] max-w-md place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-100 p-6 text-center text-[0.95rem] leading-snug text-slate-500"
         >
           Select an image to crop your profile photo
         </div>
