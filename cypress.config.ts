@@ -1,4 +1,4 @@
-import { defineConfig } from 'cypress'
+import { defineConfig } from 'cypress';
 
 export default defineConfig({
   projectId: 'ufu8qj',
@@ -12,4 +12,4 @@ export default defineConfig({
     viewportHeight: 800,
   },
   allowCypressEnv: false,
-})
+});

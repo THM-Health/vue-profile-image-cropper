@@ -13,67 +13,52 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
-  shallowRef,
+  shallowReactive,
   useAttrs,
   watch,
-} from 'vue'
-import {
-  clampOffset,
-  getCenteredOffset,
-  getCoverScale,
-  getCropOrigin,
-  getCropPositionPercent,
-  getDisplaySize,
-  getSourceCropRect,
-  reanchorOffsetAfterZoom,
-} from '../cropMath'
+} from 'vue';
+import { ImageCropper, type CropResult } from '../imageCropper';
 
-export interface CropResult {
-  blob: Blob
-  dataURL: string
-}
+export type { CropResult };
 
 export interface CropPosition {
   /** 0 at left limit, 100 at right limit. `null` when X cannot be panned. */
-  x: number | null
+  x: number | null;
   /** 0 at top limit, 100 at bottom limit. `null` when Y cannot be panned. */
-  y: number | null
+  y: number | null;
 }
 
-defineOptions({ inheritAttrs: false })
+defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
   defineProps<{
-    /** Source image file (required; parent should mount only when available). */
-    image: File
+    /** Source image file (required; fixed for the lifetime of the component). */
+    image: File;
     /** Controlled zoom level (parent-owned). */
-    zoom: number
+    zoom: number;
     /** Pixel size of the exported square image. */
-    outputSize?: number
+    outputSize?: number;
     /** MIME type for canvas export. */
-    mimeType?: string
+    mimeType?: string;
     /** JPEG/WebP quality when applicable (0–1). */
-    quality?: number
+    quality?: number;
     /** Keyboard nudge distance in CSS pixels per arrow key press. */
-    keyboardStep?: number
-    /** Extra nudge when Shift is held. */
-    keyboardStepLarge?: number
+    keyboardStep?: number;
     /** Accessible label for the crop viewport. */
-    ariaLabel?: string
-    rootClass?: string
-    viewportClass?: string
-    stageClass?: string
-    imageLayerClass?: string
-    imageClass?: string
-    maskClass?: string
-    ringClass?: string
+    ariaLabel?: string;
+    rootClass?: string;
+    viewportClass?: string;
+    stageClass?: string;
+    imageLayerClass?: string;
+    imageClass?: string;
+    maskClass?: string;
+    ringClass?: string;
   }>(),
   {
     outputSize: 512,
     mimeType: 'image/jpeg',
     quality: 0.92,
     keyboardStep: 8,
-    keyboardStepLarge: 32,
     ariaLabel:
       'Image crop area. Drag or use arrow keys to reposition the image under the circular mask.',
     ariaRoleDescription: 'Image cropper',
@@ -85,452 +70,217 @@ const props = withDefaults(
     maskClass: undefined,
     ringClass: undefined,
   },
-)
+);
 
 const emit = defineEmits<{
-  /** Fired when the image has loaded and the cropper is ready for interaction. */
-  ready: []
-  crop: [result: CropResult]
-  error: [message: string]
+  loading: [loading: boolean];
+  error: [message: string];
   /** Fired when the relative crop position changes (0–100 on each axis). */
-  position: [position: CropPosition]
-}>()
+  position: [position: CropPosition];
+}>();
 
-const attrs = useAttrs()
+const attrs = useAttrs();
 
-const viewportRef = ref<HTMLElement | null>(null)
-const imageLayerRef = ref<HTMLElement | null>(null)
+const viewportRef = ref<HTMLElement | null>(null);
+const loading = ref(true);
+/** Tracks root field writes (imageX, zoom, displayUrl, …) without deeply proxying the canvas. */
+const cropper = shallowReactive(new ImageCropper());
 
-const displayUrl = ref<string | null>(null)
-const imageEl = shallowRef<HTMLImageElement | null>(null)
-const sourceW = ref(0)
-const sourceH = ref(0)
-const loadToken = ref(0)
-/** Tracks which load has already emitted `ready` (avoids duplicates on resize). */
-const readyEmittedForToken = ref(0)
-const ready = computed(() => imageEl.value !== null && sourceW.value > 0)
-
-const viewportWidth = ref(0)
-const viewportHeight = ref(0)
-const offsetX = ref(0)
-const offsetY = ref(0)
-
-const coverScale = computed(() =>
-  getCoverScale(sourceW.value, sourceH.value, viewportWidth.value, viewportHeight.value),
-)
-
-const display = computed(() =>
-  getDisplaySize(sourceW.value, sourceH.value, coverScale.value, props.zoom),
-)
-const displayScale = computed(() => display.value.scale)
-const displayW = computed(() => display.value.width)
-const displayH = computed(() => display.value.height)
-const cropOrigin = computed(() => getCropOrigin(viewportWidth.value, viewportHeight.value))
-const cropPosition = computed(() =>
-  getCropPositionPercent(
-    offsetX.value,
-    offsetY.value,
-    viewportWidth.value,
-    viewportHeight.value,
-    displayW.value,
-    displayH.value,
-  ),
-)
-
-function clampOffsets(): void {
-  const next = clampOffset(
-    offsetX.value,
-    offsetY.value,
-    viewportWidth.value,
-    viewportHeight.value,
-    displayW.value,
-    displayH.value,
-  )
-  offsetX.value = next.x
-  offsetY.value = next.y
-}
-
-function centerImage(): void {
-  const next = getCenteredOffset(
-    viewportWidth.value,
-    viewportHeight.value,
-    displayW.value,
-    displayH.value,
-  )
-  offsetX.value = next.x
-  offsetY.value = next.y
-}
-
-function reanchorAfterZoom(prevZoom: number, nextZoom: number): void {
-  const next = reanchorOffsetAfterZoom(
-    offsetX.value,
-    offsetY.value,
-    viewportWidth.value,
-    viewportHeight.value,
-    prevZoom,
-    nextZoom,
-    displayW.value,
-    displayH.value,
-  )
-  offsetX.value = next.x
-  offsetY.value = next.y
-}
-
-function applyImageTransform(): void {
-  const el = imageLayerRef.value
-  if (!el) return
-  el.style.width = `${displayW.value}px`
-  el.style.height = `${displayH.value}px`
-  el.style.transform = `translate(${offsetX.value}px, ${offsetY.value}px)`
-}
-
-watch([offsetX, offsetY, displayW, displayH], () => {
-  applyImageTransform()
-})
+const imageLayerStyle = computed(() => ({
+  position: 'absolute' as const,
+  top: '0',
+  left: '0',
+  width: `${cropper.display.width}px`,
+  height: `${cropper.display.height}px`,
+  transform: `translate(${cropper.viewportOffset.x}px, ${cropper.viewportOffset.y}px)`,
+  transformOrigin: '0 0',
+  willChange: 'transform',
+}));
 
 watch(
-  cropPosition,
-  (position) => {
-    if (!ready.value || viewportWidth.value <= 0 || viewportHeight.value <= 0) return
-    emit('position', { x: position.x, y: position.y })
+  loading,
+  (next) => {
+    emit('loading', next);
   },
-  { deep: true },
-)
+  { immediate: true },
+);
 
 watch(
   () => props.zoom,
   (next, prev) => {
-    if (!ready.value || prev === undefined || prev === next) return
-    // Reanchor before the display-size watch paints with a stale offset.
-    reanchorAfterZoom(prev, next)
-    applyImageTransform()
+    if (loading.value || prev === undefined || prev === next) return;
+    cropper.setZoom(next);
   },
-)
-
-function revokeDisplayUrl(): void {
-  if (displayUrl.value) {
-    URL.revokeObjectURL(displayUrl.value)
-    displayUrl.value = null
-  }
-}
-
-function resetState(): void {
-  revokeDisplayUrl()
-  imageEl.value = null
-  sourceW.value = 0
-  sourceH.value = 0
-  offsetX.value = 0
-  offsetY.value = 0
-  viewportWidth.value = 0
-  viewportHeight.value = 0
-}
-
-function emitReadyIfNeeded(): void {
-  if (!ready.value || viewportWidth.value <= 0 || viewportHeight.value <= 0) return
-  if (readyEmittedForToken.value === loadToken.value) return
-  readyEmittedForToken.value = loadToken.value
-  emit('ready')
-}
-
-async function loadHtmlImage(url: string): Promise<HTMLImageElement> {
-  const img = new Image()
-  img.decoding = 'async'
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    img.onerror = () => reject(new Error('Failed to load image.'))
-    img.src = url
-  })
-  return img
-}
-
-/**
- * Decode the file into a display/export bitmap with consistent orientation.
- * Browsers may apply EXIF orientation to <img> but not to canvas.drawImage;
- * baking orientation up-front keeps the selection and export aligned.
- */
-async function normalizeImageFile(
-  file: File,
-): Promise<{ url: string; img: HTMLImageElement; width: number; height: number }> {
-  if (typeof createImageBitmap === 'function') {
-    try {
-      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
-      const canvas = document.createElement('canvas')
-      canvas.width = bitmap.width
-      canvas.height = bitmap.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        bitmap.close()
-        throw new Error('Canvas is not available in this browser.')
-      }
-      ctx.drawImage(bitmap, 0, 0)
-      bitmap.close()
-
-      const blob = await canvasToBlob(canvas, 'image/png', 1)
-      const url = URL.createObjectURL(blob)
-      const img = await loadHtmlImage(url)
-      return { url, img, width: canvas.width, height: canvas.height }
-    } catch {
-      // Fall through to the plain object-URL path.
-    }
-  }
-
-  const url = URL.createObjectURL(file)
-  const img = await loadHtmlImage(url)
-  return { url, img, width: img.naturalWidth, height: img.naturalHeight }
-}
-
-async function loadImage(file: File): Promise<void> {
-  const token = ++loadToken.value
-
-  try {
-    const normalized = await normalizeImageFile(file)
-    if (token !== loadToken.value) {
-      URL.revokeObjectURL(normalized.url)
-      return
-    }
-
-    revokeDisplayUrl()
-    displayUrl.value = normalized.url
-    imageEl.value = normalized.img
-    sourceW.value = normalized.width
-    sourceH.value = normalized.height
-
-    await nextTick()
-    measureViewport()
-    centerImage()
-    applyImageTransform()
-    emitReadyIfNeeded()
-  } catch {
-    if (token === loadToken.value) {
-      emit('error', 'Failed to load image.')
-    }
-  }
-}
+  { flush: 'sync' },
+);
 
 watch(
-  () => props.image,
-  (file) => {
-    void loadImage(file)
+  () => cropper.getPositionPercent(),
+  (position) => {
+    if (loading.value || !cropper.viewportWidth || !cropper.viewportHeight) {
+      return;
+    }
+    emit('position', { x: position.x, y: position.y });
   },
-  { immediate: true },
-)
+  { deep: true },
+);
 
-let resizeObserver: ResizeObserver | null = null
+let resizeObserver: ResizeObserver | null = null;
 
 function measureViewport(): void {
-  const el = viewportRef.value
-  if (!el) return
+  const el = viewportRef.value;
+  if (!el) return;
   // Use the laid-out content box; avoid flooring so export matches the visible area.
-  const width = el.clientWidth
-  const height = el.clientHeight
-  if (width <= 0 || height <= 0) return
+  const width = el.clientWidth;
+  const height = el.clientHeight;
+  if (width <= 0 || height <= 0) return;
 
-  const prevW = viewportWidth.value
-  const prevH = viewportHeight.value
-  viewportWidth.value = width
-  viewportHeight.value = height
-
-  if (!ready.value) return
-
-  if (prevW > 0 && prevH > 0 && (prevW !== width || prevH !== height)) {
-    offsetX.value *= width / prevW
-    offsetY.value *= height / prevH
-    clampOffsets()
-  } else if (prevW === 0 || prevH === 0) {
-    centerImage()
-  } else {
-    clampOffsets()
-  }
-
-  emitReadyIfNeeded()
+  cropper.setViewport(width, height);
 }
 
-onMounted(() => {
-  measureViewport()
-  if (viewportRef.value && typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => measureViewport())
-    resizeObserver.observe(viewportRef.value)
-  } else {
-    window.addEventListener('resize', measureViewport)
+onMounted(async () => {
+  loading.value = true;
+
+  try {
+    await cropper.loadImage(props.image);
+    cropper.setZoom(props.zoom);
+    loading.value = false;
+
+    await nextTick();
+    measureViewport();
+    if (viewportRef.value && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => measureViewport());
+      resizeObserver.observe(viewportRef.value);
+    } else {
+      window.addEventListener('resize', measureViewport);
+    }
+  } catch {
+    loading.value = false;
+    emit('error', 'Failed to load image.');
   }
-})
+});
 
 onBeforeUnmount(() => {
-  loadToken.value += 1
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  window.removeEventListener('resize', measureViewport)
-  endPointerDrag()
-  resetState()
-})
+  resizeObserver?.disconnect();
+  window.removeEventListener('resize', measureViewport);
+  cropper.destroy();
+});
 
-const isDragging = ref(false)
-const dragPointerId = ref<number | null>(null)
-let dragStartX = 0
-let dragStartY = 0
-let dragOriginOffsetX = 0
-let dragOriginOffsetY = 0
+const dragPointerId = ref<number | null>(null);
+let lastPointerX = 0;
+let lastPointerY = 0;
 
 function onPointerDown(event: PointerEvent): void {
-  if (!ready.value || event.button !== 0) return
-  const target = event.currentTarget as HTMLElement
-  target.setPointerCapture(event.pointerId)
-  isDragging.value = true
-  dragPointerId.value = event.pointerId
-  dragStartX = event.clientX
-  dragStartY = event.clientY
-  dragOriginOffsetX = offsetX.value
-  dragOriginOffsetY = offsetY.value
+  if (loading.value || event.button !== 0) return;
+  // Save pointer id to only handle one pointer at a time
+  dragPointerId.value = event.pointerId;
+
+  // Update last pointer position
+  lastPointerX = event.clientX;
+  lastPointerY = event.clientY;
 }
 
 function onPointerMove(event: PointerEvent): void {
-  if (!isDragging.value || event.pointerId !== dragPointerId.value) return
-  offsetX.value = dragOriginOffsetX + (event.clientX - dragStartX)
-  offsetY.value = dragOriginOffsetY + (event.clientY - dragStartY)
-  clampOffsets()
+  // Ignore pointer all other pointers movements, except for the one that started the drag
+  if (dragPointerId.value === null || event.pointerId !== dragPointerId.value) return;
+
+  // Calculate delta and move the image by the delta
+  const deltaX = event.clientX - lastPointerX;
+  const deltaY = event.clientY - lastPointerY;
+  cropper.panBy(deltaX, deltaY);
+
+  // Update last pointer position
+  lastPointerX = event.clientX;
+  lastPointerY = event.clientY;
 }
 
 function endPointerDrag(event?: PointerEvent): void {
   if (event && dragPointerId.value !== null && event.pointerId !== dragPointerId.value) {
-    return
+    return;
   }
-  isDragging.value = false
-  dragPointerId.value = null
+  dragPointerId.value = null;
 }
 
 function onPointerUp(event: PointerEvent): void {
-  const target = event.currentTarget as HTMLElement
-  if (target.hasPointerCapture?.(event.pointerId)) {
-    target.releasePointerCapture(event.pointerId)
-  }
-  endPointerDrag(event)
+  endPointerDrag(event);
 }
 
 function onPointerCancel(event: PointerEvent): void {
-  endPointerDrag(event)
+  endPointerDrag(event);
+}
+
+function onPointerLeave(event: PointerEvent): void {
+  endPointerDrag(event);
 }
 
 function onViewportKeydown(event: KeyboardEvent): void {
-  if (!ready.value) return
+  if (loading.value) return;
 
-  const step = event.shiftKey ? props.keyboardStepLarge : props.keyboardStep
+  const step = props.keyboardStep;
 
-  let handled = true
+  let deltaX = 0;
+  let deltaY = 0;
   switch (event.key) {
     case 'ArrowUp':
-      offsetY.value += step
-      break
+      deltaY = step;
+      break;
     case 'ArrowDown':
-      offsetY.value -= step
-      break
+      deltaY = -step;
+      break;
     case 'ArrowLeft':
-      offsetX.value += step
-      break
+      deltaX = step;
+      break;
     case 'ArrowRight':
-      offsetX.value -= step
-      break
+      deltaX = -step;
+      break;
     default:
-      handled = false
+      return;
   }
 
-  if (handled) {
-    event.preventDefault()
-    clampOffsets()
-  }
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob)
-        else reject(new Error('Canvas export failed.'))
-      },
-      type,
-      quality,
-    )
-  })
-}
-
-function blobToDataURL(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('Failed to read cropped image.'))
-    reader.readAsDataURL(blob)
-  })
+  // Move the image by the delta
+  event.preventDefault();
+  cropper.panBy(deltaX, deltaY);
 }
 
 async function cropImage(): Promise<CropResult | null> {
-  const img = imageEl.value
-  if (!img || !viewportWidth.value || !viewportHeight.value || !displayScale.value) {
-    emit('error', 'Image is not ready to crop.')
-    return null
+  if (loading.value) {
+    emit('error', 'Image is not ready to crop.');
+    return null;
   }
-
-  const scale = displayScale.value
-  const rect = getSourceCropRect(
-    offsetX.value,
-    offsetY.value,
-    viewportWidth.value,
-    viewportHeight.value,
-    scale,
-    sourceW.value,
-    sourceH.value,
-  )
-
-  const out = Math.max(1, Math.round(props.outputSize))
-  const canvas = document.createElement('canvas')
-  canvas.width = out
-  canvas.height = out
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    emit('error', 'Canvas is not available in this browser.')
-    return null
-  }
-
-  // Prefer nearest-neighbor when not resampling so export matches on-screen pixels.
-  ctx.imageSmoothingEnabled = Math.abs(rect.size - out) > 0.01
-  ctx.imageSmoothingQuality = 'high'
-  if (props.mimeType === 'image/jpeg' || props.mimeType === 'image/webp') {
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, out, out)
-  } else {
-    ctx.clearRect(0, 0, out, out)
-  }
-  ctx.drawImage(img, rect.x, rect.y, rect.size, rect.size, 0, 0, out, out)
 
   try {
-    const blob = await canvasToBlob(canvas, props.mimeType, props.quality)
-    const dataURL = await blobToDataURL(blob)
-    const result: CropResult = { blob, dataURL }
-    emit('crop', result)
-    return result
+    const result = await cropper.cropImage({
+      outputSize: props.outputSize,
+      mimeType: props.mimeType,
+      quality: props.quality,
+    });
+    return result;
   } catch {
-    emit('error', 'Failed to export the cropped image.')
-    return null
+    emit('error', 'Failed to export the cropped image.');
+    return null;
   }
 }
 
 defineExpose({
   cropImage,
-  remeasure: measureViewport,
   getCropState: () => ({
-    offsetX: offsetX.value,
-    offsetY: offsetY.value,
-    viewportWidth: viewportWidth.value,
-    viewportHeight: viewportHeight.value,
-    cropSize: cropOrigin.value.size,
-    position: { ...cropPosition.value },
-    zoom: props.zoom,
-    sourceW: sourceW.value,
-    sourceH: sourceH.value,
-    displayScale: displayScale.value,
-    displayW: displayW.value,
-    displayH: displayH.value,
+    imageX: cropper.imageX,
+    imageY: cropper.imageY,
+    anchorSourceX: cropper.anchorSourceX,
+    anchorSourceY: cropper.anchorSourceY,
+    viewportOffset: { ...cropper.viewportOffset },
+    viewportWidth: cropper.viewportWidth,
+    viewportHeight: cropper.viewportHeight,
+    cropSize: cropper.cropPlacement.size,
+    position: { ...cropper.getPositionPercent() },
+    zoom: cropper.zoom,
+    sourceW: cropper.sourceWidth,
+    sourceH: cropper.sourceHeight,
+    displayScale: cropper.display.scale,
+    displayW: cropper.display.width,
+    displayH: cropper.display.height,
   }),
-})
+});
 </script>
 
 <template>
@@ -541,19 +291,19 @@ defineExpose({
       role="application"
       tabindex="0"
       :aria-label="ariaLabel"
-      :data-dragging="isDragging ? 'true' : 'false'"
       :style="{
         position: 'relative',
         overflow: 'hidden',
         touchAction: 'none',
         userSelect: 'none',
         outline: 'none',
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: 'move',
       }"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
+      @pointerleave="onPointerLeave"
       @keydown="onViewportKeydown"
     >
       <div
@@ -561,21 +311,11 @@ defineExpose({
         aria-hidden="true"
         :style="{ position: 'absolute', inset: '0', overflow: 'hidden' }"
       >
-        <div
-          ref="imageLayerRef"
-          :class="imageLayerClass"
-          :style="{
-            position: 'absolute',
-            top: '0',
-            left: '0',
-            transformOrigin: '0 0',
-            willChange: 'transform',
-          }"
-        >
+        <div :class="imageLayerClass" :style="imageLayerStyle">
           <img
-            v-if="displayUrl"
+            v-if="cropper.displayUrl"
             :class="imageClass"
-            :src="displayUrl"
+            :src="cropper.displayUrl"
             aria-hidden="true"
             :style="{
               display: 'block',
@@ -592,10 +332,10 @@ defineExpose({
           :class="maskClass"
           :style="{
             position: 'absolute',
-            left: `${cropOrigin.x}px`,
-            top: `${cropOrigin.y}px`,
-            width: `${cropOrigin.size}px`,
-            height: `${cropOrigin.size}px`,
+            left: `${cropper.cropPlacement.x}px`,
+            top: `${cropper.cropPlacement.y}px`,
+            width: `${cropper.cropPlacement.size}px`,
+            height: `${cropper.cropPlacement.size}px`,
             borderRadius: '50%',
             pointerEvents: 'none',
           }"
@@ -604,10 +344,10 @@ defineExpose({
           :class="ringClass"
           :style="{
             position: 'absolute',
-            left: `${cropOrigin.x}px`,
-            top: `${cropOrigin.y}px`,
-            width: `${cropOrigin.size}px`,
-            height: `${cropOrigin.size}px`,
+            left: `${cropper.cropPlacement.x}px`,
+            top: `${cropper.cropPlacement.y}px`,
+            width: `${cropper.cropPlacement.size}px`,
+            height: `${cropper.cropPlacement.size}px`,
             borderRadius: '50%',
             pointerEvents: 'none',
           }"

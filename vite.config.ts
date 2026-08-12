@@ -1,18 +1,22 @@
-import { fileURLToPath, URL } from 'node:url'
-import tailwindcss from '@tailwindcss/vite'
-import vue from '@vitejs/plugin-vue'
-import dts from 'vite-plugin-dts'
-import { defineConfig } from 'vitest/config'
+import { fileURLToPath, URL } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
+import dts from 'vite-plugin-dts';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }) => {
-  const isLib = mode === 'lib'
+  const isLib = mode === 'lib';
 
   if (isLib) {
     return {
       plugins: [
         vue(),
         dts({
-          include: ['src/index.ts', 'src/cropMath.ts', 'src/components/ProfileImageCropper.vue'],
+          include: [
+            'src/index.ts',
+            'src/imageCropper.ts',
+            'src/components/ProfileImageCropper.vue',
+          ],
           outDirs: ['dist'],
           tsconfigPath: './tsconfig.app.json',
         }),
@@ -34,11 +38,11 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-    }
+    };
   }
 
-  const basePath = process.env.BASE_PATH
-  const base = basePath ? (basePath.endsWith('/') ? basePath : `${basePath}/`) : '/'
+  const basePath = process.env.BASE_PATH;
+  const base = basePath ? (basePath.endsWith('/') ? basePath : `${basePath}/`) : '/';
 
   return {
     base,
@@ -58,8 +62,8 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       coverage: {
         provider: 'v8',
-        include: ['src/cropMath.ts', 'src/components/ProfileImageCropper.vue'],
+        include: ['src/imageCropper.ts', 'src/components/ProfileImageCropper.vue'],
       },
     },
-  }
-})
+  };
+});

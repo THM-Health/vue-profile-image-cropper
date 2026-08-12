@@ -1,7 +1,7 @@
-import { mount, flushPromises } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref } from 'vue'
-import ProfileImageCropper from './ProfileImageCropper.vue'
+import { mount, flushPromises } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick, ref } from 'vue';
+import ProfileImageCropper from './ProfileImageCropper.vue';
 
 /** Minimal valid 1×1 PNG. Dimensions are mocked on HTMLImageElement. */
 const TINY_PNG = Uint8Array.from(
@@ -9,36 +9,64 @@ const TINY_PNG = Uint8Array.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   ),
   (char) => char.charCodeAt(0),
-)
+);
 
 function createImageFile(name = 'portrait.png'): File {
-  return new File([TINY_PNG], name, { type: 'image/png' })
+  return new File([TINY_PNG], name, { type: 'image/png' });
 }
 
 function mockImageLoad(width = 120, height = 180) {
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => ({
+      width,
+      height,
+      close: vi.fn(),
+    })),
+  );
+
   Object.defineProperty(globalThis.Image.prototype, 'src', {
     configurable: true,
     set(this: HTMLImageElement, value: string) {
-      this.setAttribute('src', value)
-      Object.defineProperty(this, 'naturalWidth', { configurable: true, value: width })
-      Object.defineProperty(this, 'naturalHeight', { configurable: true, value: height })
-      queueMicrotask(() => this.onload?.(new Event('load')))
+      this.setAttribute('src', value);
+      Object.defineProperty(this, 'naturalWidth', { configurable: true, value: width });
+      Object.defineProperty(this, 'naturalHeight', { configurable: true, value: height });
+      queueMicrotask(() => this.onload?.(new Event('load')));
     },
     get(this: HTMLImageElement) {
-      return this.getAttribute('src')
+      return this.getAttribute('src');
     },
-  })
+  });
+
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => {
+    return {
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high',
+      fillStyle: '',
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+  }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+
+  HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string) {
+    callback(new Blob(['preview'], { type: type ?? 'image/jpeg' }));
+  };
 }
 
 describe('ProfileImageCropper', () => {
+  beforeEach(() => {
+    mockImageLoad();
+  });
+
   afterEach(() => {
-    vi.restoreAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it('renders an accessible crop viewport', async () => {
-    mockImageLoad()
-    const file = createImageFile()
-    const zoom = ref(1)
+    const file = createImageFile();
+    const zoom = ref(1);
 
     const wrapper = mount(ProfileImageCropper, {
       props: {
@@ -47,42 +75,24 @@ describe('ProfileImageCropper', () => {
         viewportClass: 'test-viewport',
       },
       attachTo: document.body,
-    })
+    });
 
-    const viewport = wrapper.get('[role="application"]')
-    Object.defineProperty(viewport.element, 'clientWidth', { value: 200 })
-    Object.defineProperty(viewport.element, 'clientHeight', { value: 200 })
+    const viewport = wrapper.get('[role="application"]');
+    Object.defineProperty(viewport.element, 'clientWidth', { value: 200 });
+    Object.defineProperty(viewport.element, 'clientHeight', { value: 200 });
 
-    await flushPromises()
-    await nextTick()
-    ;(wrapper.vm as unknown as { remeasure: () => void }).remeasure()
-    await nextTick()
+    await flushPromises();
+    await nextTick();
 
-    expect(viewport.classes()).toContain('test-viewport')
-    expect(wrapper.find('img').exists()).toBe(true)
-    expect(wrapper.emitted('ready')).toBeTruthy()
+    expect(viewport.classes()).toContain('test-viewport');
+    expect(wrapper.find('img').exists()).toBe(true);
+    expect(wrapper.emitted('loading')?.at(-1)?.[0]).toBe(false);
 
-    wrapper.unmount()
-  })
+    wrapper.unmount();
+  });
 
   it('exports a square crop result', async () => {
-    mockImageLoad()
-    const file = createImageFile()
-
-    HTMLCanvasElement.prototype.getContext = vi.fn(() => {
-      return {
-        imageSmoothingEnabled: true,
-        imageSmoothingQuality: 'high',
-        fillStyle: '',
-        clearRect: vi.fn(),
-        fillRect: vi.fn(),
-        drawImage: vi.fn(),
-      } as unknown as CanvasRenderingContext2D
-    }) as unknown as typeof HTMLCanvasElement.prototype.getContext
-
-    HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string) {
-      callback(new Blob(['cropped'], { type: type ?? 'image/png' }))
-    }
+    const file = createImageFile();
 
     const wrapper = mount(ProfileImageCropper, {
       props: {
@@ -92,35 +102,29 @@ describe('ProfileImageCropper', () => {
         mimeType: 'image/png',
       },
       attachTo: document.body,
-    })
+    });
 
-    const viewport = wrapper.get('[role="application"]')
-    Object.defineProperty(viewport.element, 'clientWidth', { value: 200 })
-    Object.defineProperty(viewport.element, 'clientHeight', { value: 200 })
+    const viewport = wrapper.get('[role="application"]');
+    Object.defineProperty(viewport.element, 'clientWidth', { value: 200 });
+    Object.defineProperty(viewport.element, 'clientHeight', { value: 200 });
 
-    await flushPromises()
-    await nextTick()
+    await flushPromises();
+    await nextTick();
 
     const result = await (
       wrapper.vm as unknown as {
-        cropImage: () => Promise<{ blob: Blob; dataURL: string } | null>
+        cropImage: () => Promise<{ blob: Blob } | null>;
       }
-    ).cropImage()
+    ).cropImage();
 
-    expect(result).not.toBeNull()
-    expect(result?.blob).toBeInstanceOf(Blob)
-    expect(result?.dataURL.startsWith('data:')).toBe(true)
-    expect(wrapper.emitted('crop')?.[0]?.[0]).toMatchObject({
-      blob: expect.any(Blob),
-      dataURL: expect.any(String),
-    })
+    expect(result).not.toBeNull();
+    expect(result?.blob).toBeInstanceOf(Blob);
 
-    wrapper.unmount()
-  })
+    wrapper.unmount();
+  });
 
   it('moves the image with arrow keys', async () => {
-    mockImageLoad()
-    const file = createImageFile()
+    const file = createImageFile();
 
     const wrapper = mount(ProfileImageCropper, {
       props: {
@@ -129,23 +133,23 @@ describe('ProfileImageCropper', () => {
         keyboardStep: 10,
       },
       attachTo: document.body,
-    })
+    });
 
-    const viewport = wrapper.get('[role="application"]')
-    Object.defineProperty(viewport.element, 'clientWidth', { value: 200 })
-    Object.defineProperty(viewport.element, 'clientHeight', { value: 200 })
+    const viewport = wrapper.get('[role="application"]');
+    Object.defineProperty(viewport.element, 'clientWidth', { value: 200 });
+    Object.defineProperty(viewport.element, 'clientHeight', { value: 200 });
 
-    await flushPromises()
-    await nextTick()
+    await flushPromises();
+    await nextTick();
 
-    const layer = wrapper.get('div[style*="will-change"]').element as HTMLElement
-    const before = layer.style.transform
+    const layer = wrapper.get('div[style*="will-change"]').element as HTMLElement;
+    const before = layer.style.transform;
 
-    await viewport.trigger('keydown', { key: 'ArrowUp' })
-    await nextTick()
+    await viewport.trigger('keydown', { key: 'ArrowUp' });
+    await nextTick();
 
-    expect(layer.style.transform).not.toBe(before)
+    expect(layer.style.transform).not.toBe(before);
 
-    wrapper.unmount()
-  })
-})
+    wrapper.unmount();
+  });
+});

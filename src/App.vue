@@ -1,111 +1,121 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import ProfileImageCropper, { type CropResult } from './components/ProfileImageCropper.vue'
+import { computed, ref } from 'vue';
+import ProfileImageCropper, { type CropResult } from './components/ProfileImageCropper.vue';
 
-const MIN_ZOOM = 1
-const MAX_ZOOM = 3
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3;
 
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const cropperRef = ref<InstanceType<typeof ProfileImageCropper> | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const cropperRef = ref<InstanceType<typeof ProfileImageCropper> | null>(null);
 
-const selectedImage = ref<File | null>(null)
-const zoom = ref(MIN_ZOOM)
-const isCropping = ref(false)
+const selectedImage = ref<File | null>(null);
+const cropperKey = ref(0);
+const zoom = ref(MIN_ZOOM);
+const isCropping = ref(false);
 
-const previewUrl = ref<string | null>(null)
-const croppedBlob = ref<Blob | null>(null)
-const statusMessage = ref('')
-const errorMessage = ref('')
+const previewUrl = ref<string | null>(null);
+const croppedBlob = ref<Blob | null>(null);
+const statusMessage = ref('');
+const errorMessage = ref('');
 
-const hasImage = computed(() => selectedImage.value !== null)
+const hasImage = computed(() => selectedImage.value !== null);
+const isLoadingImage = ref(false);
+const showDebug = ref(false);
 
-const outputSize = 512
-const mimeType = 'image/png'
-const quality = 1
-const keyboardStep = 8
-const rootClass = 'w-full max-w-md'
+const outputSize = 512;
+const mimeType = 'image/png';
+const quality = 1;
+const keyboardStep = 8;
+const rootClass = 'w-full max-w-md';
 const viewportClass =
-  'h-[200px] w-full max-h-[200px] rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]'
+  'h-[200px] w-full max-h-[200px] rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]';
 
 function openFilePicker(): void {
-  fileInputRef.value?.click()
+  fileInputRef.value?.click();
 }
 
 function onFileChange(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  input.value = ''
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] ?? null;
+  input.value = '';
 
-  if (!file) return
+  if (!file) return;
 
   if (!file.type.startsWith('image/')) {
-    errorMessage.value = 'Please choose an image file.'
-    statusMessage.value = ''
-    return
+    errorMessage.value = 'Please choose an image file.';
+    statusMessage.value = '';
+    return;
   }
 
-  selectedImage.value = file
-  zoom.value = MIN_ZOOM
-  errorMessage.value = ''
-  statusMessage.value = ''
+  cropperKey.value += 1;
+  selectedImage.value = file;
+  zoom.value = MIN_ZOOM;
+  errorMessage.value = '';
+  statusMessage.value = '';
 
   if (previewUrl.value?.startsWith('blob:')) {
-    URL.revokeObjectURL(previewUrl.value)
+    URL.revokeObjectURL(previewUrl.value);
   }
-  previewUrl.value = null
-  croppedBlob.value = null
+  previewUrl.value = null;
+  croppedBlob.value = null;
 }
 
 function clearSelectedImage(): void {
-  selectedImage.value = null
-  zoom.value = MIN_ZOOM
+  selectedImage.value = null;
+  zoom.value = MIN_ZOOM;
+  isLoadingImage.value = false;
   if (previewUrl.value?.startsWith('blob:')) {
-    URL.revokeObjectURL(previewUrl.value)
+    URL.revokeObjectURL(previewUrl.value);
   }
-  previewUrl.value = null
-  croppedBlob.value = null
-  statusMessage.value = ''
-  errorMessage.value = ''
+  previewUrl.value = null;
+  croppedBlob.value = null;
+  statusMessage.value = '';
+  errorMessage.value = '';
 }
 
 function onZoomInput(event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value)
-  zoom.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+  const value = Number((event.target as HTMLInputElement).value);
+  zoom.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 }
 
 function onCrop(result: CropResult): void {
   if (previewUrl.value?.startsWith('blob:')) {
-    URL.revokeObjectURL(previewUrl.value)
+    URL.revokeObjectURL(previewUrl.value);
   }
-  previewUrl.value = URL.createObjectURL(result.blob)
-  croppedBlob.value = result.blob
-  errorMessage.value = ''
-  statusMessage.value = `Cropped square image (${result.blob.type}, ${result.blob.size} bytes).`
+  previewUrl.value = URL.createObjectURL(result.blob);
+  croppedBlob.value = result.blob;
+  errorMessage.value = '';
+  statusMessage.value = `Cropped square image (${result.blob.type}, ${result.blob.size} bytes).`;
 }
 
 function onError(message: string): void {
-  errorMessage.value = message
-  statusMessage.value = ''
+  errorMessage.value = message;
+  statusMessage.value = '';
+}
+
+function onLoading(loading: boolean): void {
+  isLoadingImage.value = loading;
 }
 
 async function onCropClick(): Promise<void> {
-  if (!cropperRef.value || isCropping.value || !hasImage.value) return
-  isCropping.value = true
+  if (!cropperRef.value || isCropping.value || !hasImage.value || isLoadingImage.value) return;
+  isCropping.value = true;
   try {
-    await cropperRef.value.cropImage()
+    const result = await cropperRef.value.cropImage();
+    if (result) onCrop(result);
   } finally {
-    isCropping.value = false
+    isCropping.value = false;
   }
 }
 
 async function downloadCropped(): Promise<void> {
-  if (!croppedBlob.value) return
-  const url = URL.createObjectURL(croppedBlob.value)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'profile-image.png'
-  anchor.click()
-  URL.revokeObjectURL(url)
+  if (!croppedBlob.value) return;
+  const url = URL.createObjectURL(croppedBlob.value);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'profile-image.png';
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 
@@ -166,6 +176,7 @@ async function downloadCropped(): Promise<void> {
 
         <ProfileImageCropper
           v-else
+          :key="cropperKey"
           ref="cropperRef"
           :zoom="zoom"
           :image="selectedImage"
@@ -177,8 +188,8 @@ async function downloadCropped(): Promise<void> {
           :viewport-class="viewportClass"
           mask-class="shadow-[0_0_0_9999px_rgb(17_24_39_/_0.55)]"
           ring-class="border-2 border-white shadow-[inset_0_0_0_1px_rgb(17_24_39_/_0.35)]"
-          @crop="onCrop"
           @error="onError"
+          @loading="onLoading"
         />
 
         <div class="mt-4 flex flex-col gap-3.5">
@@ -188,7 +199,7 @@ async function downloadCropped(): Promise<void> {
               for="profile-zoom"
             >
               Zoom
-              <span class="font-medium tabular-nums text-slate-500"> {{ zoom.toFixed(2) }}× </span>
+              <span class="font-medium tabular-nums text-slate-500"> {{ zoom.toFixed(1) }}× </span>
             </label>
             <input
               id="profile-zoom"
@@ -196,13 +207,13 @@ async function downloadCropped(): Promise<void> {
               type="range"
               :min="MIN_ZOOM"
               :max="MAX_ZOOM"
-              step="0.01"
+              step="0.1"
               :value="zoom"
-              :disabled="!hasImage"
+              :disabled="!hasImage || isLoadingImage"
               :aria-valuemin="MIN_ZOOM"
               :aria-valuemax="MAX_ZOOM"
-              :aria-valuenow="Number(zoom.toFixed(2))"
-              :aria-valuetext="`${zoom.toFixed(2)} times`"
+              :aria-valuenow="Number(zoom.toFixed(1))"
+              :aria-valuetext="`${zoom.toFixed(1)} times`"
               aria-describedby="profile-zoom-hint"
               @input="onZoomInput"
             />
@@ -215,12 +226,26 @@ async function downloadCropped(): Promise<void> {
           <button
             type="button"
             class="w-full cursor-pointer rounded-lg border border-transparent bg-teal-700 px-4 py-2.5 text-[0.9375rem] font-semibold text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-            :disabled="!hasImage || isCropping"
+            :disabled="!hasImage || isCropping || isLoadingImage"
             :aria-busy="isCropping"
             @click="onCropClick"
           >
             {{ isCropping ? 'Cropping…' : 'Crop' }}
           </button>
+
+          <button
+            type="button"
+            class="cursor-pointer self-start rounded-lg border border-transparent bg-transparent px-0 py-1 text-sm font-semibold text-slate-500 hover:text-slate-900 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            :aria-expanded="showDebug"
+            @click="showDebug = !showDebug"
+          >
+            {{ showDebug ? 'Hide debug' : 'Show debug' }}
+          </button>
+
+          <pre
+            v-if="showDebug"
+            class="m-0 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
+            >{{ cropperRef?.getCropState() }}</pre>
         </div>
       </section>
 
