@@ -1,224 +1,384 @@
+/**
+ * Unit tests for ImageCropper geometry.
+ *
+ * Crop space (used by pan/zoom):
+ * - Origin = crop center (0, 0)
+ * - +x right, +y up
+ * - imageX / imageY = center of the displayed image
+ *
+ * Source space (export): top-left origin, +y down.
+ * Viewport space (DOM): top-left origin, +y down.
+ */
 import { describe, expect, it } from 'vitest';
 import { ImageCropper } from './imageCropper';
 
-function cropperState(
-  sourceWidth: number,
-  sourceHeight: number,
-  viewportWidth: number,
-  viewportHeight: number,
-  zoom = 1,
-  imageX = 0,
-  imageY = 0,
-): ImageCropper {
+/** Build a cropper with source + viewport laid out, then optional zoom/position. */
+function createCropper(options: {
+  sourceWidth: number;
+  sourceHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  zoom?: number;
+  imageX?: number;
+  imageY?: number;
+}): ImageCropper {
   const cropper = new ImageCropper();
-  cropper.sourceWidth = sourceWidth;
-  cropper.sourceHeight = sourceHeight;
-  cropper.setViewport(viewportWidth, viewportHeight);
-  cropper.setZoom(zoom);
-  cropper.commitPosition(imageX, imageY);
+  cropper.sourceWidth = options.sourceWidth;
+  cropper.sourceHeight = options.sourceHeight;
+  cropper.setViewport(options.viewportWidth, options.viewportHeight);
+  if (options.zoom !== undefined) cropper.setZoom(options.zoom);
+  if (options.imageX !== undefined || options.imageY !== undefined) {
+    cropper.commitPosition(options.imageX ?? cropper.imageX, options.imageY ?? cropper.imageY);
+  }
   return cropper;
 }
 
 describe('ImageCropper', () => {
-  describe('display size', () => {
-    it('covers the crop square, not the full viewport', () => {
-      expect(cropperState(400, 400, 400, 200, 1).display.scale).toBe(0.5);
-      expect(cropperState(800, 400, 200, 200, 1).display.scale).toBe(0.5);
+  describe('display (cover + zoom)', () => {
+    it('scales the image to cover the crop square (not the full viewport)', () => {
+      // 400×400 source in a 400×200 viewport → crop is 200 → cover scale 0.5
+      expect(
+        createCropper({
+          sourceWidth: 400,
+          sourceHeight: 400,
+          viewportWidth: 400,
+          viewportHeight: 200,
+        }).display.scale,
+      ).toBe(0.5);
+
+      // 800×400 source in a 200×200 viewport → crop is 200 → cover scale 0.5
+      expect(
+        createCropper({
+          sourceWidth: 800,
+          sourceHeight: 400,
+          viewportWidth: 200,
+          viewportHeight: 200,
+        }).display.scale,
+      ).toBe(0.5);
     });
 
-    it('returns scale 1 for invalid source dimensions', () => {
-      expect(cropperState(0, 100, 200, 200, 1).display.scale).toBe(1);
+    it('multiplies cover scale by zoom', () => {
+      const base = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        zoom: 1,
+      });
+      expect(base.display).toEqual({ scale: 0.5, width: 400, height: 200 });
+
+      const zoomed = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        zoom: 2,
+      });
+      expect(zoomed.display).toEqual({ scale: 1, width: 800, height: 400 });
     });
 
-    it('applies zoom', () => {
-      const at1x = cropperState(800, 400, 200, 200, 1);
-      expect(at1x.display).toEqual({ scale: 0.5, width: 400, height: 200 });
-
-      const at2x = cropperState(800, 400, 200, 200, 2);
-      expect(at2x.display).toEqual({ scale: 1, width: 800, height: 400 });
+    it('falls back to scale 1 when source size is invalid', () => {
+      expect(
+        createCropper({
+          sourceWidth: 0,
+          sourceHeight: 100,
+          viewportWidth: 200,
+          viewportHeight: 200,
+        }).display.scale,
+      ).toBe(1);
     });
   });
 
-  describe('crop placement', () => {
-    it('centers the square crop using the shorter viewport edge', () => {
-      expect(cropperState(1, 1, 400, 200).cropPlacement).toEqual({ x: 100, y: 0, size: 200 });
-      expect(cropperState(1, 1, 200, 400).cropPlacement).toEqual({ x: 0, y: 100, size: 200 });
+  describe('viewportCrop / viewportImage (DOM positions)', () => {
+    it('places the crop square on the shorter viewport edge, centered', () => {
+      // Wide viewport: crop height = 200, offset 100 from the left
+      expect(
+        createCropper({
+          sourceWidth: 1,
+          sourceHeight: 1,
+          viewportWidth: 400,
+          viewportHeight: 200,
+        }).viewportCrop,
+      ).toEqual({ x: 100, y: 0, size: 200 });
+
+      // Tall viewport: crop width = 200, offset 100 from the top
+      expect(
+        createCropper({
+          sourceWidth: 1,
+          sourceHeight: 1,
+          viewportWidth: 200,
+          viewportHeight: 400,
+        }).viewportCrop,
+      ).toEqual({ x: 0, y: 100, size: 200 });
+    });
+
+    it('converts a centered image into a CSS translate for the image layer', () => {
+      // Display 400×200, crop 200 → image top-left sits 100px left of the crop
+      const cropper = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: 0,
+      });
+      expect(cropper.viewportImage).toEqual({ x: -100, y: 0 });
     });
   });
 
-  describe('image position bounds', () => {
-    it('never allows empty space inside the crop square', () => {
-      const g = cropperState(400, 200, 200, 200, 1);
-      expect(g.imagePositionBounds).toEqual({
-        minX: -200,
-        maxX: 0,
-        minY: 0,
-        maxY: 0,
+  describe('imagePositionBounds and commitPosition', () => {
+    it('allows horizontal pan only when the image is wider than the crop', () => {
+      // Display 400×200, crop 200 → ±X, no vertical room
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 200,
+        viewportWidth: 200,
+        viewportHeight: 200,
+      });
+      expect(cropper.imagePositionBounds.minX).toBe(-100);
+      expect(cropper.imagePositionBounds.maxX).toBe(100);
+      expect(cropper.imagePositionBounds.minY).toBeCloseTo(0);
+      expect(cropper.imagePositionBounds.maxY).toBeCloseTo(0);
+    });
+
+    it('allows pan on both axes when zoomed past cover', () => {
+      // Zoom 2 on a square source in a wide viewport → display 400×400, crop 200
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 400,
+        viewportWidth: 400,
+        viewportHeight: 200,
+        zoom: 2,
+      });
+      expect(cropper.imagePositionBounds).toEqual({
+        minX: -100,
+        maxX: 100,
+        minY: -100,
+        maxY: 100,
       });
     });
 
-    it('allows background outside the crop in a rectangular viewport', () => {
-      const g = cropperState(800, 400, 400, 200, 1);
-      expect(g.imagePositionBounds).toEqual({
-        minX: -200,
-        maxX: 0,
-        minY: 0,
-        maxY: 0,
+    it('clamps commitPosition into bounds', () => {
+      // Display 400×300 at zoom 1.5 → bounds ±100 X, ±50 Y
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 300,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        zoom: 1.5,
       });
+      cropper.commitPosition(-500, 50);
+      expect(cropper.imageX).toBe(-100);
+      expect(cropper.imageY).toBe(50);
     });
 
-    it('lets a zoomed square image reach left/right regions in a wide viewport', () => {
-      const g = cropperState(400, 400, 400, 200, 2);
-      expect(g.imagePositionBounds).toEqual({
-        minX: -200,
-        maxX: 0,
-        minY: -200,
-        maxY: 0,
+    it('resets the image center to (0, 0) on center()', () => {
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 200,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: -80,
+        imageY: 0,
       });
-    });
-
-    it('clamps image position into bounds', () => {
-      const g = cropperState(400, 300, 200, 200, 1.5);
-      g.commitPosition(-500, 50);
-      expect(g.imageX).toBe(-200);
-      expect(g.imageY).toBe(0);
-    });
-
-    it('centers the image on the crop', () => {
-      const a = cropperState(400, 200, 200, 200, 1);
-      a.center();
-      expect(a).toMatchObject({ imageX: -100, imageY: 0 });
-
-      const b = cropperState(400, 200, 400, 200, 1);
-      b.center();
-      expect(b).toMatchObject({ imageX: -100, imageY: 0 });
+      cropper.center();
+      expect(cropper.imageX).toBeCloseTo(0);
+      expect(cropper.imageY).toBeCloseTo(0);
+      expect(cropper.anchorSourceX).toBe(200);
+      expect(cropper.anchorSourceY).toBe(100);
     });
   });
 
-  describe('viewport offset', () => {
-    it('maps crop-space position to a CSS translate', () => {
-      const g = cropperState(800, 400, 200, 200, 1, -100, 0);
-      expect(g.viewportOffset).toEqual({ x: -100, y: 0 });
-    });
-  });
+  describe('getPositionPercent', () => {
+    it('maps pan limits to 0–100 (left/top → 0, right/bottom → 100)', () => {
+      // Bounds ±100 X, ±50 Y
+      const opts = {
+        sourceWidth: 400,
+        sourceHeight: 300,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        zoom: 1.5,
+      } as const;
 
-  describe('position percentages', () => {
-    it('reports 0 at left/top and 100 at right/bottom', () => {
-      expect(cropperState(400, 300, 200, 200, 1.5, -200, -100).getPositionPercent()).toEqual({
+      expect(createCropper({ ...opts, imageX: -100, imageY: 50 }).getPositionPercent()).toEqual({
         x: 0,
         y: 0,
       });
-      expect(cropperState(400, 300, 200, 200, 1.5, 0, 0).getPositionPercent()).toEqual({
+      expect(createCropper({ ...opts, imageX: 100, imageY: -50 }).getPositionPercent()).toEqual({
         x: 100,
         y: 100,
       });
-      expect(cropperState(400, 300, 200, 200, 1.5, -100, -50).getPositionPercent()).toEqual({
+      expect(createCropper({ ...opts, imageX: 0, imageY: 0 }).getPositionPercent()).toEqual({
         x: 50,
         y: 50,
       });
     });
 
-    it('reports null when an axis cannot be panned', () => {
-      expect(cropperState(200, 200, 200, 200, 1).getPositionPercent()).toEqual({
-        x: null,
-        y: null,
+    it('returns null on an axis that cannot pan', () => {
+      // Square at cover: no pan room
+      expect(
+        createCropper({
+          sourceWidth: 200,
+          sourceHeight: 200,
+          viewportWidth: 200,
+          viewportHeight: 200,
+        }).getPositionPercent(),
+      ).toEqual({ x: null, y: null });
+
+      // Landscape: only X can pan
+      expect(
+        createCropper({
+          sourceWidth: 400,
+          sourceHeight: 200,
+          viewportWidth: 200,
+          viewportHeight: 200,
+          imageX: 0,
+          imageY: 0,
+        }).getPositionPercent(),
+      ).toEqual({ x: 50, y: null });
+    });
+  });
+
+  describe('anchor, pan, and zoom', () => {
+    it('centers the image and anchor on the first setViewport', () => {
+      const cropper = new ImageCropper();
+      cropper.sourceWidth = 800;
+      cropper.sourceHeight = 400;
+      cropper.setViewport(200, 200);
+
+      expect(cropper.imageX).toBeCloseTo(0);
+      expect(cropper.imageY).toBeCloseTo(0);
+      expect(cropper.anchorSourceX).toBe(400);
+      expect(cropper.anchorSourceY).toBe(200);
+    });
+
+    it('updates the source anchor when panning', () => {
+      const cropper = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: 0,
       });
-      expect(cropperState(400, 200, 200, 200, 1, -100, 0).getPositionPercent()).toEqual({
-        x: 50,
-        y: null,
+
+      // Drag image left → imageX decreases; crop center sees a point further right on the source
+      cropper.panBy(-50, 0);
+      expect(cropper.imageX).toBe(-50);
+      expect(cropper.anchorSourceX).toBe(500);
+      expect(cropper.anchorSourceY).toBe(200);
+    });
+
+    it('keeps the same source anchor under the crop center while zooming in', () => {
+      const cropper = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: 0,
       });
+      const { anchorSourceX, anchorSourceY } = cropper;
+
+      cropper.setZoom(2);
+      expect(cropper.anchorSourceX).toBe(anchorSourceX);
+      expect(cropper.anchorSourceY).toBe(anchorSourceY);
+      // Still looking at source center → image stays centered
+      expect(cropper.imageX).toBeCloseTo(0);
+      expect(cropper.imageY).toBeCloseTo(0);
+    });
+
+    it('rewrites the anchor when zoom-out clamping recenters the image', () => {
+      // Panned into a corner at zoom 2; zooming out removes pan room and snaps to center
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 400,
+        viewportWidth: 400,
+        viewportHeight: 200,
+        zoom: 2,
+        imageX: -100,
+        imageY: -100,
+      });
+      expect(cropper.anchorSourceX).toBe(300);
+      expect(cropper.anchorSourceY).toBe(100);
+
+      cropper.setZoom(1);
+      expect(cropper.imageX).toBeCloseTo(0);
+      expect(cropper.imageY).toBeCloseTo(0);
+      expect(cropper.anchorSourceX).toBe(200);
+      expect(cropper.anchorSourceY).toBe(200);
+    });
+
+    it('re-applies the anchor after viewport resize so the source crop stays the same', () => {
+      const cropper = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: 0,
+      });
+      const before = cropper.getSourceCropRect();
+
+      cropper.setViewport(400, 200);
+      expect(cropper.getSourceCropRect()).toEqual(before);
     });
   });
 
-  describe('anchor and zoom', () => {
-    it('defaults the anchor to the source-image center after construction', () => {
-      const g = new ImageCropper();
-      g.sourceWidth = 800;
-      g.sourceHeight = 400;
-      g.setViewport(200, 200);
-      expect(g.anchorSourceX).toBe(400);
-      expect(g.anchorSourceY).toBe(200);
-      expect(g.imageX).toBe(-100);
-      expect(g.imageY).toBe(0);
+  describe('getSourceCropRect (export mapping)', () => {
+    it('maps a centered landscape image to the middle of the source', () => {
+      // Source 800×400, cover scale 0.5, crop 200 → source square 400×400 starting at x=200
+      const cropper = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: 0,
+      });
+      expect(cropper.getSourceCropRect()).toEqual({ x: 200, y: 0, size: 400 });
     });
 
-    it('updates the anchor when panning', () => {
-      const g = cropperState(800, 400, 200, 200, 1, -100, 0);
-      g.panBy(-50, 0);
-      expect(g.imageX).toBe(-150);
-      expect(g.anchorSourceX).toBe(500);
-      expect(g.anchorSourceY).toBe(200);
+    it('maps a centered portrait image to the middle of the source', () => {
+      // Source 400×800 → source square starts at y=200
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 800,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: 0,
+      });
+      expect(cropper.getSourceCropRect()).toEqual({ x: 0, y: 200, size: 400 });
     });
 
-    it('keeps a fixed anchor under the crop center across zoom changes', () => {
-      const g = cropperState(800, 400, 200, 200, 1, -100, 0);
-      const anchorX = g.anchorSourceX;
-      const anchorY = g.anchorSourceY;
-      g.setZoom(2);
-      expect(g.imageX).toBe(-300);
-      expect(g.imageY).toBe(-100);
-      expect(g.anchorSourceX).toBe(anchorX);
-      expect(g.anchorSourceY).toBe(anchorY);
+    it('moves the source crop up when the image is shifted down', () => {
+      // imageY < 0 → image center below crop center → crop shows higher (smaller y) on the source
+      const cropper = createCropper({
+        sourceWidth: 400,
+        sourceHeight: 800,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        imageX: 0,
+        imageY: -50,
+      });
+      expect(cropper.getSourceCropRect()).toEqual({ x: 0, y: 100, size: 400 });
     });
 
-    it('shifts the anchor when zoom-out clamping moves the image', () => {
-      const g = cropperState(400, 400, 400, 200, 2, -200, 0);
-      expect(g.anchorSourceX).toBe(300);
-      expect(g.anchorSourceY).toBe(100);
+    it('keeps the export rect inside the source bitmap after extreme pan', () => {
+      const cropper = createCropper({
+        sourceWidth: 800,
+        sourceHeight: 400,
+        viewportWidth: 200,
+        viewportHeight: 200,
+      });
+      cropper.commitPosition(-1000, -1000);
+      const rect = cropper.getSourceCropRect();
 
-      g.setZoom(1);
-      expect(g.imageX).toBe(0);
-      expect(g.imageY).toBe(0);
-      expect(g.anchorSourceX).toBe(200);
-      expect(g.anchorSourceY).toBe(200);
-    });
-  });
-
-  describe('viewport resize', () => {
-    it('preserves the source crop when the viewport is resized', () => {
-      const g = cropperState(800, 400, 200, 200, 1, -100, 0);
-      const source = g.getUnclampedSourceCropRect();
-
-      g.setViewport(400, 200);
-      expect(g.getUnclampedSourceCropRect()).toEqual(source);
-    });
-
-    it('centers on the first viewport layout', () => {
-      const g = new ImageCropper();
-      g.sourceWidth = 800;
-      g.sourceHeight = 400;
-      g.setViewport(200, 200);
-      expect(g.imageX).toBe(-100);
-      expect(g.imageY).toBe(0);
-      expect(g.anchorSourceX).toBe(400);
-      expect(g.anchorSourceY).toBe(200);
-    });
-  });
-
-  describe('source crop rect', () => {
-    it('maps crop-space position back to source pixels for export', () => {
-      const g = cropperState(800, 400, 200, 200, 1, -100, 0);
-      expect(g.getSourceCropRect()).toEqual({ x: 200, y: 0, size: 400 });
-    });
-
-    it('uses the centered crop square for rectangular viewports', () => {
-      const g = cropperState(1600, 400, 400, 200, 1, -200, 0);
-      expect(g.getSourceCropRect()).toEqual({ x: 400, y: 0, size: 400 });
-    });
-
-    it('never exceeds source bounds', () => {
-      const g = cropperState(800, 400, 200, 200, 1);
-      g.commitPosition(-1000, -1000);
-      const rect = g.getSourceCropRect();
       expect(rect.x).toBeGreaterThanOrEqual(0);
       expect(rect.y).toBeGreaterThanOrEqual(0);
       expect(rect.x + rect.size).toBeLessThanOrEqual(800);
       expect(rect.y + rect.size).toBeLessThanOrEqual(400);
-    });
-
-    it('maps vertical panning on portrait sources correctly', () => {
-      const g = cropperState(400, 800, 200, 200, 1, 0, -100);
-      expect(g.getSourceCropRect()).toEqual({ x: 0, y: 200, size: 400 });
     });
   });
 });

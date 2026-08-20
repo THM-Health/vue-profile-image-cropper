@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * ProfileImageCropper — unstyled Vue 3 crop viewport.
- *
- * Pure Vue + native browser APIs (Canvas, Pointer Events).
- * Assumes a File `image` is provided on mount. Parent owns zoom bounds,
- * file selection, and action controls. Style via class props.
- */
-
 import {
   computed,
   nextTick,
@@ -30,12 +22,19 @@ export interface CropPosition {
 
 defineOptions({ inheritAttrs: false });
 
+/** Controlled zoom (`v-model:zoom`). */
+const zoom = defineModel<number>('zoom', { required: true });
+
 const props = withDefaults(
   defineProps<{
     /** Source image file (required; fixed for the lifetime of the component). */
     image: File;
-    /** Controlled zoom level (parent-owned). */
-    zoom: number;
+    /** Minimum zoom for wheel / +/- controls. */
+    minZoom?: number;
+    /** Maximum zoom for wheel / +/- controls. */
+    maxZoom?: number;
+    /** Zoom delta for wheel ticks and +/- keys. */
+    zoomStep?: number;
     /** Pixel size of the exported square image. */
     outputSize?: number;
     /** MIME type for canvas export. */
@@ -55,12 +54,15 @@ const props = withDefaults(
     ringClass?: string;
   }>(),
   {
+    minZoom: 1,
+    maxZoom: Number.POSITIVE_INFINITY,
+    zoomStep: 0.1,
     outputSize: 512,
     mimeType: 'image/jpeg',
     quality: 0.92,
     keyboardStep: 8,
     ariaLabel:
-      'Image crop area. Drag or use arrow keys to reposition the image under the circular mask.',
+      'Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge.',
     ariaRoleDescription: 'Image cropper',
     rootClass: undefined,
     viewportClass: undefined,
@@ -92,11 +94,14 @@ const imageLayerStyle = computed(() => ({
   left: '0',
   width: `${cropper.display.width}px`,
   height: `${cropper.display.height}px`,
-  transform: `translate(${cropper.viewportOffset.x}px, ${cropper.viewportOffset.y}px)`,
+  transform: `translate(${cropper.viewportImage.x}px, ${cropper.viewportImage.y}px)`,
   transformOrigin: '0 0',
   willChange: 'transform',
 }));
 
+/**
+ * Emits the loading state to the parent component.
+ */
 watch(
   loading,
   (next) => {
@@ -105,8 +110,11 @@ watch(
   { immediate: true },
 );
 
+/**
+ * Updates the cropper's zoom level when the parent-controlled zoom level changes.
+ */
 watch(
-  () => props.zoom,
+  zoom,
   (next, prev) => {
     if (loading.value || prev === undefined || prev === next) return;
     cropper.setZoom(next);
@@ -114,6 +122,9 @@ watch(
   { flush: 'sync' },
 );
 
+/**
+ * Emits the crop position to the parent component.
+ */
 watch(
   () => cropper.getPositionPercent(),
   (position) => {
@@ -127,6 +138,9 @@ watch(
 
 let resizeObserver: ResizeObserver | null = null;
 
+/**
+ * Measures the viewport size and updates the cropper's viewport.
+ */
 function measureViewport(): void {
   const el = viewportRef.value;
   if (!el) return;
@@ -143,11 +157,14 @@ onMounted(async () => {
 
   try {
     await cropper.loadImage(props.image);
-    cropper.setZoom(props.zoom);
+    cropper.setZoom(zoom.value);
     loading.value = false;
 
     await nextTick();
     measureViewport();
+
+    // If browser supports ResizeObserver, use it to measure the viewport size.
+    // Otherwise, use window resize event to measure the viewport size.
     if (viewportRef.value && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => measureViewport());
       resizeObserver.observe(viewportRef.value);
@@ -166,6 +183,9 @@ onBeforeUnmount(() => {
   cropper.destroy();
 });
 
+/**
+ * Tracks the pointer and positions for dragging the image
+ */
 const dragPointerId = ref<number | null>(null);
 let lastPointerX = 0;
 let lastPointerY = 0;
@@ -184,9 +204,9 @@ function onPointerMove(event: PointerEvent): void {
   // Ignore pointer all other pointers movements, except for the one that started the drag
   if (dragPointerId.value === null || event.pointerId !== dragPointerId.value) return;
 
-  // Calculate delta and move the image by the delta
+  // DOM +y is down; crop space +y is up — flip the vertical delta.
   const deltaX = event.clientX - lastPointerX;
-  const deltaY = event.clientY - lastPointerY;
+  const deltaY = -(event.clientY - lastPointerY);
   cropper.panBy(deltaX, deltaY);
 
   // Update last pointer position
@@ -213,19 +233,58 @@ function onPointerLeave(event: PointerEvent): void {
   endPointerDrag(event);
 }
 
+/**
+ * Update zoom via v-model (wheel / +/- keys).
+ */
+function setZoom(next: number): void {
+  const rounded = Number((Math.round(next / props.zoomStep) * props.zoomStep).toFixed(6));
+  const nextZoom = Math.min(props.maxZoom, Math.max(props.minZoom, rounded));
+
+  zoom.value = nextZoom;
+}
+
+function onWheel(event: WheelEvent): void {
+  if (loading.value) return;
+  event.preventDefault();
+  const direction = event.deltaY < 0 ? 1 : -1;
+  setZoom(zoom.value + direction * props.zoomStep);
+}
+
+/**
+ * Handles keyboard navigation for the crop viewport.
+ */
 function onViewportKeydown(event: KeyboardEvent): void {
   if (loading.value) return;
 
+  // Zoom: + / = / NumpadAdd, - / _ / NumpadSubtract
+  if (event.key === '+' || event.key === '=' || event.key === 'Add' || event.code === 'NumpadAdd') {
+    event.preventDefault();
+    setZoom(zoom.value + props.zoomStep);
+    return;
+  }
+  if (
+    event.key === '-' ||
+    event.key === '_' ||
+    event.key === 'Subtract' ||
+    event.code === 'NumpadSubtract'
+  ) {
+    event.preventDefault();
+    setZoom(zoom.value - props.zoomStep);
+    return;
+  }
+
   const step = props.keyboardStep;
 
+  // Arrows move the crop over the image (inverse of dragging the image).
+  // Crop space: +x right, +y up.
   let deltaX = 0;
   let deltaY = 0;
   switch (event.key) {
     case 'ArrowUp':
-      deltaY = step;
+      deltaY = -step;
       break;
     case 'ArrowDown':
-      deltaY = -step;
+      deltaY = step;
       break;
     case 'ArrowLeft':
       deltaX = step;
@@ -237,11 +296,13 @@ function onViewportKeydown(event: KeyboardEvent): void {
       return;
   }
 
-  // Move the image by the delta
   event.preventDefault();
   cropper.panBy(deltaX, deltaY);
 }
 
+/**
+ * API for cropping the image and returning the cropped image as a Blob.
+ */
 async function cropImage(): Promise<CropResult | null> {
   if (loading.value) {
     emit('error', 'Image is not ready to crop.');
@@ -268,10 +329,10 @@ defineExpose({
     imageY: cropper.imageY,
     anchorSourceX: cropper.anchorSourceX,
     anchorSourceY: cropper.anchorSourceY,
-    viewportOffset: { ...cropper.viewportOffset },
+    viewportImage: { ...cropper.viewportImage },
     viewportWidth: cropper.viewportWidth,
     viewportHeight: cropper.viewportHeight,
-    cropSize: cropper.cropPlacement.size,
+    cropSize: cropper.viewportCrop.size,
     position: { ...cropper.getPositionPercent() },
     zoom: cropper.zoom,
     sourceW: cropper.sourceWidth,
@@ -279,6 +340,7 @@ defineExpose({
     displayScale: cropper.display.scale,
     displayW: cropper.display.width,
     displayH: cropper.display.height,
+    ...cropper.imagePositionBounds,
   }),
 });
 </script>
@@ -304,6 +366,7 @@ defineExpose({
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @pointerleave="onPointerLeave"
+      @wheel="onWheel"
       @keydown="onViewportKeydown"
     >
       <div
@@ -332,10 +395,10 @@ defineExpose({
           :class="maskClass"
           :style="{
             position: 'absolute',
-            left: `${cropper.cropPlacement.x}px`,
-            top: `${cropper.cropPlacement.y}px`,
-            width: `${cropper.cropPlacement.size}px`,
-            height: `${cropper.cropPlacement.size}px`,
+            left: `${cropper.viewportCrop.x}px`,
+            top: `${cropper.viewportCrop.y}px`,
+            width: `${cropper.viewportCrop.size}px`,
+            height: `${cropper.viewportCrop.size}px`,
             borderRadius: '50%',
             pointerEvents: 'none',
           }"
@@ -344,10 +407,10 @@ defineExpose({
           :class="ringClass"
           :style="{
             position: 'absolute',
-            left: `${cropper.cropPlacement.x}px`,
-            top: `${cropper.cropPlacement.y}px`,
-            width: `${cropper.cropPlacement.size}px`,
-            height: `${cropper.cropPlacement.size}px`,
+            left: `${cropper.viewportCrop.x}px`,
+            top: `${cropper.viewportCrop.y}px`,
+            width: `${cropper.viewportCrop.size}px`,
+            height: `${cropper.viewportCrop.size}px`,
             borderRadius: '50%',
             pointerEvents: 'none',
           }"

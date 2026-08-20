@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import ProfileImageCropper, { type CropResult } from './components/ProfileImageCropper.vue';
+import CropSpaceDebug, { type CropSpaceSnapshot } from './components/CropSpaceDebug.vue';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
@@ -21,6 +22,38 @@ const errorMessage = ref('');
 const hasImage = computed(() => selectedImage.value !== null);
 const isLoadingImage = ref(false);
 const showDebug = ref(false);
+const debugState = ref<CropSpaceSnapshot | null>(null);
+
+function syncDebugState(): void {
+  const state = cropperRef.value?.getCropState();
+  if (!state) {
+    debugState.value = null;
+    return;
+  }
+  debugState.value = {
+    imageX: state.imageX,
+    imageY: state.imageY,
+    anchorSourceX: state.anchorSourceX,
+    anchorSourceY: state.anchorSourceY,
+    cropSize: state.cropSize,
+    displayW: state.displayW,
+    displayH: state.displayH,
+    displayScale: state.displayScale,
+    zoom: state.zoom,
+    sourceW: state.sourceW,
+    sourceH: state.sourceH,
+    minX: state.minX,
+    maxX: state.maxX,
+    minY: state.minY,
+    maxY: state.maxY,
+  };
+}
+
+watch([showDebug, zoom, selectedImage, isLoadingImage], async () => {
+  if (!showDebug.value) return;
+  await nextTick();
+  syncDebugState();
+});
 
 const outputSize = 512;
 const mimeType = 'image/png';
@@ -64,6 +97,7 @@ function clearSelectedImage(): void {
   selectedImage.value = null;
   zoom.value = MIN_ZOOM;
   isLoadingImage.value = false;
+  debugState.value = null;
   if (previewUrl.value?.startsWith('blob:')) {
     URL.revokeObjectURL(previewUrl.value);
   }
@@ -123,7 +157,7 @@ async function downloadCropped(): Promise<void> {
   <div
     class="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_80%_50%_at_10%_0%,#ccfbf1_0%,transparent_55%),radial-gradient(ellipse_70%_45%_at_100%_10%,#e0e7ff_0%,transparent_50%)] px-[clamp(1rem,3vw,2rem)] py-[clamp(1rem,3vw,2rem)] text-slate-900"
   >
-    <header class="mx-auto mb-7 max-w-4xl">
+    <header class="mx-auto mb-7 max-w-6xl">
       <h1 class="m-0 mb-1 text-[clamp(1.5rem,2.5vw,2rem)] tracking-tight">Profile image cropper</h1>
       <p class="m-0 text-[0.95rem] text-slate-600">
         Unstyled Vue 3 cropper · parent-owned controls · Tailwind classes
@@ -131,7 +165,7 @@ async function downloadCropped(): Promise<void> {
     </header>
 
     <main
-      class="mx-auto grid max-w-4xl grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]"
+      class="mx-auto grid max-w-6xl grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]"
     >
       <section
         class="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgb(15_23_42_/_0.04)]"
@@ -178,7 +212,10 @@ async function downloadCropped(): Promise<void> {
           v-else
           :key="cropperKey"
           ref="cropperRef"
-          :zoom="zoom"
+          v-model:zoom="zoom"
+          :min-zoom="MIN_ZOOM"
+          :max-zoom="MAX_ZOOM"
+          :zoom-step="0.1"
           :image="selectedImage"
           :output-size="outputSize"
           :mime-type="mimeType"
@@ -190,6 +227,7 @@ async function downloadCropped(): Promise<void> {
           ring-class="border-2 border-white shadow-[inset_0_0_0_1px_rgb(17_24_39_/_0.35)]"
           @error="onError"
           @loading="onLoading"
+          @position="syncDebugState"
         />
 
         <div class="mt-4 flex flex-col gap-3.5">
@@ -218,8 +256,8 @@ async function downloadCropped(): Promise<void> {
               @input="onZoomInput"
             />
             <p id="profile-zoom-hint" class="m-0 text-[0.8rem] leading-snug text-slate-500">
-              Drag the image or use arrow keys to reposition. Zoom from {{ MIN_ZOOM }}× to
-              {{ MAX_ZOOM }}×.
+              Drag to reposition; scroll or press +/− to zoom; arrow keys to nudge. Zoom
+              {{ MIN_ZOOM }}×–{{ MAX_ZOOM }}×.
             </p>
           </div>
 
@@ -232,93 +270,103 @@ async function downloadCropped(): Promise<void> {
           >
             {{ isCropping ? 'Cropping…' : 'Crop' }}
           </button>
+        </div>
+      </section>
 
+      <div class="flex min-w-0 flex-col gap-6">
+        <div class="flex justify-end">
           <button
             type="button"
-            class="cursor-pointer self-start rounded-lg border border-transparent bg-transparent px-0 py-1 text-sm font-semibold text-slate-500 hover:text-slate-900 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-[0_10px_30px_rgb(15_23_42_/_0.04)] hover:border-slate-400 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             :aria-expanded="showDebug"
             @click="showDebug = !showDebug"
           >
             {{ showDebug ? 'Hide debug' : 'Show debug' }}
           </button>
-
-          <pre
-            v-if="showDebug"
-            class="m-0 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
-            >{{ cropperRef?.getCropState() }}</pre>
-        </div>
-      </section>
-
-      <section
-        class="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgb(15_23_42_/_0.04)]"
-        aria-labelledby="preview-heading"
-      >
-        <h2 id="preview-heading" class="mb-4 mt-0 text-base font-bold">Result</h2>
-
-        <p
-          v-if="errorMessage"
-          class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-          role="alert"
-        >
-          {{ errorMessage }}
-        </p>
-        <p
-          v-else-if="statusMessage"
-          class="mb-4 text-sm leading-snug"
-          role="status"
-          aria-live="polite"
-        >
-          {{ statusMessage }}
-        </p>
-        <p v-else class="mb-4 text-sm leading-snug text-slate-500">
-          The Crop button exports a square rectangular image. The circular mask is visual only and
-          is not baked into the result.
-        </p>
-
-        <div class="mb-4 grid grid-cols-2 gap-4">
-          <figure class="m-0">
-            <figcaption class="mb-2 text-xs font-semibold text-slate-600">Square export</figcaption>
-            <div
-              class="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-100"
-            >
-              <img
-                data-test="cropped-image"
-                v-if="previewUrl"
-                class="block size-full object-cover"
-                :src="previewUrl"
-                alt="Cropped square profile image"
-              />
-              <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
-            </div>
-          </figure>
-
-          <figure class="m-0">
-            <figcaption class="mb-2 text-xs font-semibold text-slate-600">
-              As a circular avatar
-            </figcaption>
-            <div
-              class="grid aspect-square w-full place-items-center overflow-hidden rounded-full border border-dashed border-slate-300 bg-slate-100"
-            >
-              <img
-                v-if="previewUrl"
-                class="block size-full object-cover"
-                :src="previewUrl"
-                alt="Cropped image shown in a circular avatar frame"
-              />
-              <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
-            </div>
-          </figure>
         </div>
 
-        <button
-          type="button"
-          class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-semibold hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-          :disabled="!croppedBlob"
-          @click="downloadCropped"
+        <section
+          v-if="showDebug"
+          class="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgb(15_23_42_/_0.04)]"
+          aria-labelledby="debug-heading"
         >
-          Download cropped image
-        </button>
-      </section>
+          <h2 id="debug-heading" class="mb-4 mt-0 text-base font-bold">Debug</h2>
+          <CropSpaceDebug :state="debugState" />
+        </section>
+
+        <section
+          class="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgb(15_23_42_/_0.04)]"
+          aria-labelledby="preview-heading"
+        >
+          <h2 id="preview-heading" class="mb-4 mt-0 text-base font-bold">Result</h2>
+
+          <p
+            v-if="errorMessage"
+            class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+            role="alert"
+          >
+            {{ errorMessage }}
+          </p>
+          <p
+            v-else-if="statusMessage"
+            class="mb-4 text-sm leading-snug"
+            role="status"
+            aria-live="polite"
+          >
+            {{ statusMessage }}
+          </p>
+          <p v-else class="mb-4 text-sm leading-snug text-slate-500">
+            The Crop button exports a square rectangular image. The circular mask is visual only and
+            is not baked into the result.
+          </p>
+
+          <div class="mb-4 grid max-w-md grid-cols-2 gap-4">
+            <figure class="m-0">
+              <figcaption class="mb-2 text-xs font-semibold text-slate-600">
+                Square export
+              </figcaption>
+              <div
+                class="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-100"
+              >
+                <img
+                  data-test="cropped-image"
+                  v-if="previewUrl"
+                  class="block size-full object-cover"
+                  :src="previewUrl"
+                  alt="Cropped square profile image"
+                />
+                <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
+              </div>
+            </figure>
+
+            <figure class="m-0">
+              <figcaption class="mb-2 text-xs font-semibold text-slate-600">
+                As a circular avatar
+              </figcaption>
+              <div
+                class="grid aspect-square w-full place-items-center overflow-hidden rounded-full border border-dashed border-slate-300 bg-slate-100"
+              >
+                <img
+                  v-if="previewUrl"
+                  class="block size-full object-cover"
+                  :src="previewUrl"
+                  alt="Cropped image shown in a circular avatar frame"
+                />
+                <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
+              </div>
+            </figure>
+          </div>
+
+          <button
+            type="button"
+            class="w-full max-w-md cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-semibold hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            :disabled="!croppedBlob"
+            @click="downloadCropped"
+          >
+            Download cropped image
+          </button>
+        </section>
+      </div>
     </main>
   </div>
 </template>

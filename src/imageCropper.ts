@@ -1,24 +1,28 @@
 /**
- * Image cropper: geometry + oriented source canvas for preview/export.
+ * Image cropper
+ *
+ * Contains all logic and math for cropping an image.
  *
  * ## Mental model
  *
  * The crop region is a **square** (`cropSize` × `cropSize`). The circle is CSS-only.
  *
- * **Crop space** (all pan/zoom logic lives here):
- * - Origin at the **top-left** of the crop square: (0, 0)
- * - x → right, y → down
- * - The crop fills [0, cropSize] × [0, cropSize]
- * - `imageX` / `imageY`: top-left corner of the displayed image
- * - The image may move, but the crop square must stay fully inside the image:
- *   - imageX ≤ 0, imageY ≤ 0
- *   - imageX + displayWidth ≥ cropSize, imageY + displayHeight ≥ cropSize
+ * **Crop space** (all pan/zoom logic lives here) — mathematical axes:
+ * - Origin at the **center** of the crop square: (0, 0)
+ * - x → right, y → **up**
+ * - The crop fills [-half, half] × [-half, half] where half = cropSize / 2
+ * - `imageX` / `imageY`: **center** of the displayed image in crop space
+ * - Dragging the image left decreases `imageX`; dragging it up increases `imageY`
+ * - The crop square must stay fully inside the image (see `imagePositionBounds`)
  * - `anchorSourceX` / `anchorSourceY`: source-image point kept under the crop center.
  *   Fixed while zooming; recalculated when panning or when zoom-out clamping moves the image.
  *
- * **Viewport space** (display only):
- * - DOM top-left origin; the crop square is centered via `cropPlacement`
- * - `viewportOffset`: image layer top-left for CSS `translate()`
+ * **Source / canvas space** (export only):
+ * - Top-left origin, y → down (standard image pixels)
+ *
+ * **Viewport space** (display only, DOM top-left origin, y → down):
+ * - `viewportCrop`: crop square `{ x, y, size }` relative to the viewport
+ * - `viewportImage`: image layer top-left `{ x, y }` relative to the viewport (CSS `translate`)
  */
 
 export interface Point {
@@ -26,8 +30,8 @@ export interface Point {
   y: number;
 }
 
-/** Top-left of the crop square in viewport pixels (for CSS placement). */
-export interface CropPlacement {
+/** Crop square `{ x, y, size }` in viewport/DOM pixels. */
+export interface ViewportCrop {
   x: number;
   y: number;
   size: number;
@@ -85,35 +89,56 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number):
 }
 
 export class ImageCropper {
+  // Dimensions of the source image
   sourceWidth = 0;
   sourceHeight = 0;
 
+  // Dimensions of the viewport (dynamically changed if the user resizes the window)
   viewportWidth = 0;
   viewportHeight = 0;
+
+  // Zoom level
   zoom = 1;
-  /** Top-left of the displayed image in crop space. */
+
+  // Center of the displayed image in crop space (origin = crop center, +y up).
   imageX = 0;
   imageY = 0;
-  /** Source-image point kept under the crop center. */
+
+  // Source-image coordinates for the point under the crop center
   anchorSourceX = 0;
   anchorSourceY = 0;
 
-  /** Oriented source pixels — shared coordinate space for preview and export. */
+  // Canvas with the original image
   private sourceCanvas: HTMLCanvasElement | null = null;
+
+  // Object URL of the rendered canvas with the original image
+  // Will be transformed using CSS for panning and zooming
   private _displayUrl: string | null = null;
 
-  /** Object URL for the oriented preview JPEG. */
+  /**
+   * Get the object URL to show the original image in the crop area
+   */
   get displayUrl(): string | null {
     return this._displayUrl;
   }
 
-  /** Edge length of the square crop region. */
+  /**
+   * Calculate the size of the crop square
+   * As it is a square, the size is the minimum of the viewport width and height
+   */
   get cropSize(): number {
     return Math.min(this.viewportWidth, this.viewportHeight);
   }
 
-  /** Where the crop square sits in the viewport (circle/mask CSS uses this). */
-  get cropPlacement(): CropPlacement {
+  /** Half of the crop square edge length. */
+  get cropHalf(): number {
+    return this.cropSize / 2;
+  }
+
+  /**
+   * Crop square position in the viewport (DOM). Centered using the shorter edge.
+   */
+  get viewportCrop(): ViewportCrop {
     const size = this.cropSize;
     return {
       x: (this.viewportWidth - size) / 2,
@@ -122,7 +147,9 @@ export class ImageCropper {
     };
   }
 
-  /** Display size of the image layer after cover + zoom. */
+  /**
+   * Get the display size of the image with applied zoom
+   */
   get display(): DisplaySize {
     const scale = this.coverScale * this.zoom;
     return {
@@ -132,40 +159,53 @@ export class ImageCropper {
     };
   }
 
-  /** Scale that makes the image cover the crop square at zoom 1. */
+  /**
+   * Calculate the scale that makes the image cover the crop square at zoom 1
+   */
   get coverScale(): number {
     const size = this.cropSize;
     if (!this.sourceWidth || !this.sourceHeight || !size) return 1;
     return Math.max(size / this.sourceWidth, size / this.sourceHeight);
   }
 
-  /** Center of the crop square in crop space. */
-  get cropCenter(): Point {
-    const center = this.cropSize / 2;
-    return { x: center, y: center };
-  }
-
   /**
-   * Valid range for `imageX` / `imageY` so the crop square stays inside the image.
-   * max is always 0 (image edge aligned with crop top-left); min is negative when pannable.
+   * Valid range for `imageX` / `imageY` (image center) so the crop stays inside the image.
+   * When an axis cannot pan, min === max === 0.
    */
   get imagePositionBounds(): ImagePositionBounds {
     const { width, height } = this.display;
     const size = this.cropSize;
+    const maxX = (width - size) / 2;
+    const maxY = (height - size) / 2;
     return {
-      minX: size - width,
-      maxX: 0,
-      minY: size - height,
-      maxY: 0,
+      minX: -maxX,
+      maxX,
+      minY: -maxY,
+      maxY,
     };
   }
 
-  /** Image layer top-left in viewport pixels (for CSS `translate`). */
-  get viewportOffset(): Point {
-    const { x, y } = this.cropPlacement;
+  /**
+   * Image layer top-left position in the viewport (DOM), for CSS `translate`.
+   * Converts math crop space → viewport coordinates.
+   */
+  get viewportImage(): Point {
+    // Get the center of the crop square in the viewport
+    const { x, y } = this.viewportCrop;
+    const centerX = x + this.cropHalf;
+    const centerY = y + this.cropHalf;
+
+    // Get the display size of the image with applied zoom
+    const { width, height } = this.display;
+
+    // Get the image top-left position in the math space
+    const imageTopLeftMathX = this.imageX - width / 2;
+    const imageTopLeftMathY = this.imageY + height / 2;
+
+    // Convert the image top-left position to the viewport coordinates
     return {
-      x: x + this.imageX,
-      y: y + this.imageY,
+      x: centerX + imageTopLeftMathX,
+      y: centerY - imageTopLeftMathY,
     };
   }
 
@@ -226,10 +266,7 @@ export class ImageCropper {
       ctx.clearRect(0, 0, outputSize, outputSize);
     }
 
-    const rect = this.getSourceCropRect();
-    const sx = Math.round(rect.x);
-    const sy = Math.round(rect.y);
-    const sSize = Math.round(rect.size);
+    const { x: sx, y: sy, size: sSize } = this.getSourceCropRect();
     ctx.drawImage(source, sx, sy, sSize, sSize, 0, 0, outputSize, outputSize);
 
     const blob = await canvasToBlob(canvas, mimeType, quality);
@@ -254,7 +291,10 @@ export class ImageCropper {
     this.anchorSourceY = 0;
   }
 
-  /** Relative position within the pan range (0–100). `null` when an axis cannot pan. */
+  /**
+   * Relative position within the pan range (0–100).
+   * 0 = left / top limit, 100 = right / bottom limit. `null` when an axis cannot pan.
+   */
   getPositionPercent(): CropPositionPercent {
     const { minX, maxX, minY, maxY } = this.imagePositionBounds;
     const rangeX = maxX - minX;
@@ -262,24 +302,30 @@ export class ImageCropper {
 
     return {
       x: rangeX <= 0 ? null : clamp(((this.imageX - minX) / rangeX) * 100, 0, 100),
-      y: rangeY <= 0 ? null : clamp(((this.imageY - minY) / rangeY) * 100, 0, 100),
+      // Top (maxY) → 0, bottom (minY) → 100
+      y: rangeY <= 0 ? null : clamp(((maxY - this.imageY) / rangeY) * 100, 0, 100),
     };
   }
 
-  /** Map the visible crop region back to source-image coordinates for export. */
-  getUnclampedSourceCropRect(): SourceCropRect {
+  /**
+   * Map the visible crop window to source-image pixels for export.
+   * Clamps so the rect stays inside the bitmap (e.g. floating-point drift).
+   */
+  getSourceCropRect(): SourceCropRect {
     const scale = this.display.scale;
     if (!scale) return { x: 0, y: 0, size: 0 };
 
-    return {
-      x: -this.imageX / scale,
-      y: -this.imageY / scale,
-      size: this.cropSize / scale,
-    };
-  }
+    const { width, height } = this.display;
 
-  getSourceCropRect(): SourceCropRect {
-    const { x: sx, y: sy, size: sSize } = this.getUnclampedSourceCropRect();
+    // Image top-left and crop top-left in math space
+    const imageTopLeftX = this.imageX - width / 2;
+    const imageTopLeftY = this.imageY + height / 2;
+    const cropTopLeftX = -this.cropHalf;
+    const cropTopLeftY = this.cropHalf;
+
+    const sx = -(imageTopLeftX - cropTopLeftX) / scale;
+    const sy = (imageTopLeftY - cropTopLeftY) / scale;
+    const sSize = this.cropSize / scale;
 
     const x = clamp(sx, 0, Math.max(0, this.sourceWidth - sSize));
     const y = clamp(sy, 0, Math.max(0, this.sourceHeight - sSize));
@@ -296,17 +342,30 @@ export class ImageCropper {
   }
 
   /**
-   * Clamp the image position and refresh the anchor from whatever sits under the crop center.
-   * Use after a user pan.
+   * Set image position, clamp into bounds, then refresh the anchor from the crop center.
+   * Single path for any position change (pan, zoom, resize, center).
    */
   commitPosition(imageX = this.imageX, imageY = this.imageY): void {
-    this.imageX = imageX;
-    this.imageY = imageY;
-    this.clamp();
-    this.syncAnchorFromPosition();
+    // Clamp the image position into the bounds
+    const { minX, maxX, minY, maxY } = this.imagePositionBounds;
+    this.imageX = clamp(imageX, minX, maxX);
+    this.imageY = clamp(imageY, minY, maxY);
+
+    // Update the anchor position
+    // Anchor is the point in the source image that is kept under the crop center
+    const { width, height, scale } = this.display;
+    if (!scale) {
+      this.anchorSourceX = 0;
+      this.anchorSourceY = 0;
+      return;
+    }
+    this.anchorSourceX = (width / 2 - this.imageX) / scale;
+    this.anchorSourceY = (this.imageY + height / 2) / scale;
   }
 
-  /** Move the image by a crop-space delta, then clamp and sync the anchor. */
+  /**
+   * Move the image by a crop-space delta (math: +x right, +y up), then clamp and sync the anchor.
+   */
   panBy(deltaX: number, deltaY: number): void {
     this.commitPosition(this.imageX + deltaX, this.imageY + deltaY);
   }
@@ -323,8 +382,8 @@ export class ImageCropper {
 
   /**
    * Update the viewport size.
-   * Preserves the visible source crop when resizing an already-laid-out viewport;
-   * otherwise centers (first layout) or clamps.
+   * Re-applies the current source anchor under the crop center after resize;
+   * centers on the first layout.
    */
   setViewport(viewportWidth: number, viewportHeight: number): void {
     if (viewportWidth === this.viewportWidth && viewportHeight === this.viewportHeight) {
@@ -332,62 +391,25 @@ export class ImageCropper {
     }
 
     const hadLayout = this.viewportWidth > 0 && this.viewportHeight > 0;
-    const preserved = hadLayout ? this.getUnclampedSourceCropRect() : null;
 
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
 
-    if (preserved) {
-      this.setImagePositionFromSourceRect(preserved);
-      this.syncAnchorFromPosition();
+    if (hadLayout) {
+      this.applyAnchor();
       return;
     }
-    if (!hadLayout) {
-      this.center();
-      return;
-    }
-    this.commitPosition();
+    this.center();
   }
 
+  /** Place the image so the stored source anchor sits under the crop center, then commit. */
   private applyAnchor(): void {
-    this.setImagePositionFromAnchor();
-    this.syncAnchorFromPosition();
-  }
-
-  private setImagePositionFromAnchor(): void {
-    const { x, y } = this.cropCenter;
-    const { scale } = this.display;
-    this.imageX = x - this.anchorSourceX * scale;
-    this.imageY = y - this.anchorSourceY * scale;
-    this.clamp();
-  }
-
-  private setImagePositionFromSourceRect(rect: SourceCropRect): void {
-    const { scale } = this.display;
-    if (!scale) {
-      this.clamp();
-      return;
-    }
-    this.imageX = -rect.x * scale;
-    this.imageY = -rect.y * scale;
-    this.clamp();
-  }
-
-  private syncAnchorFromPosition(): void {
-    const { scale } = this.display;
-    if (!scale) {
-      this.anchorSourceX = 0;
-      this.anchorSourceY = 0;
-      return;
-    }
-    const { x, y } = this.cropCenter;
-    this.anchorSourceX = (x - this.imageX) / scale;
-    this.anchorSourceY = (y - this.imageY) / scale;
-  }
-
-  private clamp(): void {
-    const { minX, maxX, minY, maxY } = this.imagePositionBounds;
-    this.imageX = clamp(this.imageX, minX, maxX);
-    this.imageY = clamp(this.imageY, minY, maxY);
+    const { width, height, scale } = this.display;
+    // Crop center (0,0) = image center + offset of anchor from image center,
+    // with source Y flipped into math +y up.
+    this.commitPosition(
+      width / 2 - this.anchorSourceX * scale,
+      this.anchorSourceY * scale - height / 2,
+    );
   }
 }

@@ -17,6 +17,7 @@ import { ProfileImageCropper, type CropResult } from '@thm-health/vue-profile-im
 ## Usage
 
 Mount only when a `File` is available. Own zoom bounds and controls in the parent.
+Use `v-model:zoom` with optional `minZoom` / `maxZoom` / `zoomStep` for wheel and `+`/`−` zoom.
 
 ```vue
 <script setup lang="ts">
@@ -54,7 +55,9 @@ function onLoading(loading: boolean) {
   <ProfileImageCropper
     v-if="selectedImage"
     ref="cropperRef"
-    :zoom="zoom"
+    v-model:zoom="zoom"
+    :min-zoom="MIN_ZOOM"
+    :max-zoom="MAX_ZOOM"
     :image="selectedImage"
     root-class="w-full max-w-md"
     viewport-class="h-[200px] w-full max-h-[200px] rounded-xl border bg-slate-100"
@@ -78,22 +81,25 @@ function onLoading(loading: boolean) {
 
 ### Props
 
-| Name              | Type     | Default                                             | Required | Description                                                                                |
-| ----------------- | -------- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `image`           | `File`   | —                                                   | yes      | Source image. Fixed for the component lifetime — remount (e.g. `:key`) to load a new file. |
-| `zoom`            | `number` | —                                                   | yes      | Controlled zoom multiplier (parent-owned; typically `≥ 1`).                                |
-| `outputSize`      | `number` | `512`                                               | no       | Edge length in pixels of the exported square image.                                        |
-| `mimeType`        | `string` | `'image/jpeg'`                                      | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
-| `quality`         | `number` | `0.92`                                              | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
-| `keyboardStep`    | `number` | `8`                                                 | no       | Arrow-key nudge distance in CSS pixels.                                                    |
-| `ariaLabel`       | `string` | `'Drag or use arrow keys to reposition the image.'` | no       | Accessible label for the crop viewport.                                                    |
-| `rootClass`       | `string` | —                                                   | no       | Class(es) on the root element.                                                             |
-| `viewportClass`   | `string` | —                                                   | no       | Class(es) on the crop viewport (any size / aspect ratio).                                  |
-| `stageClass`      | `string` | —                                                   | no       | Class(es) on the stage that clips the image.                                               |
-| `imageLayerClass` | `string` | —                                                   | no       | Class(es) on the positioned image layer.                                                   |
-| `imageClass`      | `string` | —                                                   | no       | Class(es) on the `<img>`.                                                                  |
-| `maskClass`       | `string` | —                                                   | no       | Class(es) on the circular mask overlay.                                                    |
-| `ringClass`       | `string` | —                                                   | no       | Class(es) on the circular ring outline.                                                    |
+| Name              | Type     | Default           | Required | Description                                                                                |
+| ----------------- | -------- | ----------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `image`           | `File`   | —                 | yes      | Source image. Fixed for the component lifetime — remount (e.g. `:key`) to load a new file. |
+| `zoom`            | `number` | —                 | yes      | Zoom multiplier via `v-model:zoom` (typically `≥ 1`).                                      |
+| `minZoom`         | `number` | `1`               | no       | Lower bound for wheel / `+` `−` zoom.                                                      |
+| `maxZoom`         | `number` | `Infinity`        | no       | Upper bound for wheel / `+` `−` zoom.                                                      |
+| `zoomStep`        | `number` | `0.1`             | no       | Zoom delta per wheel tick or `+` / `−` key.                                                |
+| `outputSize`      | `number` | `512`             | no       | Edge length in pixels of the exported square image.                                        |
+| `mimeType`        | `string` | `'image/jpeg'`    | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
+| `quality`         | `number` | `0.92`            | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
+| `keyboardStep`    | `number` | `8`               | no       | Arrow-key nudge distance in CSS pixels.                                                    |
+| `ariaLabel`       | `string` | _(see component)_ | no       | Accessible label for the crop viewport.                                                    |
+| `rootClass`       | `string` | —                 | no       | Class(es) on the root element.                                                             |
+| `viewportClass`   | `string` | —                 | no       | Class(es) on the crop viewport (any size / aspect ratio).                                  |
+| `stageClass`      | `string` | —                 | no       | Class(es) on the stage that clips the image.                                               |
+| `imageLayerClass` | `string` | —                 | no       | Class(es) on the positioned image layer.                                                   |
+| `imageClass`      | `string` | —                 | no       | Class(es) on the `<img>`.                                                                  |
+| `maskClass`       | `string` | —                 | no       | Class(es) on the circular mask overlay.                                                    |
+| `ringClass`       | `string` | —                 | no       | Class(es) on the circular ring outline.                                                    |
 
 ### Events
 
@@ -142,8 +148,8 @@ npm run build       # library bundle + types → dist/
 npm run build:demo  # demo production build
 npm run lint
 npm run format
-npm run test        # Vitest unit tests (includes crop accuracy pixelmatch)
-npm run test:e2e    # Cypress against the demo + accuracy harness
+npm run test        # Vitest unit tests
+npm run test:e2e    # Cypress against the demo (upload, zoom, pan, crop, debug)
 npm run check       # typecheck + lint + format + unit + lib build
 ```
 

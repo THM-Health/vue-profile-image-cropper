@@ -3,7 +3,7 @@ export type { CropPosition } from './components/ProfileImageCropper.vue';
 export { ImageCropper } from './imageCropper';
 export type {
   CropExportOptions,
-  CropPlacement,
+  ViewportCrop,
   CropPositionPercent,
   CropResult,
   DisplaySize,
