@@ -43,6 +43,8 @@ const props = withDefaults(
     quality?: number;
     /** Keyboard nudge distance in CSS pixels per arrow key press. */
     keyboardStep?: number;
+    /** When true, pointer, wheel, and keyboard interactions are ignored. */
+    disabled?: boolean;
     /** Accessible label for the crop viewport. */
     ariaLabel?: string;
     rootClass?: string;
@@ -61,6 +63,7 @@ const props = withDefaults(
     mimeType: 'image/jpeg',
     quality: 0.92,
     keyboardStep: 8,
+    disabled: false,
     ariaLabel:
       'Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge.',
     ariaRoleDescription: 'Image cropper',
@@ -190,8 +193,17 @@ const dragPointerId = ref<number | null>(null);
 let lastPointerX = 0;
 let lastPointerY = 0;
 
+const interactionsLocked = computed(() => loading.value || props.disabled);
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) dragPointerId.value = null;
+  },
+);
+
 function onPointerDown(event: PointerEvent): void {
-  if (loading.value || event.button !== 0) return;
+  if (interactionsLocked.value || event.button !== 0) return;
   // Save pointer id to only handle one pointer at a time
   dragPointerId.value = event.pointerId;
 
@@ -202,6 +214,7 @@ function onPointerDown(event: PointerEvent): void {
 
 function onPointerMove(event: PointerEvent): void {
   // Ignore pointer all other pointers movements, except for the one that started the drag
+  if (interactionsLocked.value) return;
   if (dragPointerId.value === null || event.pointerId !== dragPointerId.value) return;
 
   // DOM +y is down; crop space +y is up — flip the vertical delta.
@@ -244,7 +257,7 @@ function setZoom(next: number): void {
 }
 
 function onWheel(event: WheelEvent): void {
-  if (loading.value) return;
+  if (interactionsLocked.value) return;
   event.preventDefault();
   const direction = event.deltaY < 0 ? 1 : -1;
   setZoom(zoom.value + direction * props.zoomStep);
@@ -254,7 +267,7 @@ function onWheel(event: WheelEvent): void {
  * Handles keyboard navigation for the crop viewport.
  */
 function onViewportKeydown(event: KeyboardEvent): void {
-  if (loading.value) return;
+  if (interactionsLocked.value) return;
 
   // Zoom: + / = / NumpadAdd, - / _ / NumpadSubtract
   if (event.key === '+' || event.key === '=' || event.key === 'Add' || event.code === 'NumpadAdd') {
@@ -351,15 +364,17 @@ defineExpose({
       ref="viewportRef"
       :class="viewportClass"
       role="application"
-      tabindex="0"
+      :tabindex="disabled ? -1 : 0"
       :aria-label="ariaLabel"
+      :aria-disabled="disabled || undefined"
       :style="{
         position: 'relative',
         overflow: 'hidden',
         touchAction: 'none',
         userSelect: 'none',
         outline: 'none',
-        cursor: 'move',
+        cursor: disabled ? 'default' : 'move',
+        pointerEvents: disabled ? 'none' : undefined,
       }"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"

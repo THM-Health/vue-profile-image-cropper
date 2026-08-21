@@ -168,4 +168,32 @@ describe('ProfileImageCropper', () => {
 
     wrapper.unmount();
   });
+
+  it('ignores pointer, wheel, and keyboard input when disabled', async () => {
+    const wrapper = await mountCropper({
+      disabled: true,
+      keyboardStep: 10,
+      minZoom: 1,
+      maxZoom: 3,
+      zoomStep: 0.1,
+    });
+    const viewport = wrapper.get('[role="application"]');
+    const layer = wrapper.get('div[style*="will-change"]').element as HTMLElement;
+    const before = layer.style.transform;
+
+    expect(viewport.attributes('aria-disabled')).toBe('true');
+    expect(viewport.attributes('tabindex')).toBe('-1');
+
+    await viewport.trigger('keydown', { key: 'ArrowUp' });
+    await viewport.trigger('keydown', { key: '+' });
+    await viewport.trigger('wheel', { deltaY: -100 });
+    await viewport.trigger('pointerdown', { button: 0, clientX: 10, clientY: 10 });
+    await viewport.trigger('pointermove', { button: 0, clientX: 40, clientY: 10 });
+    await nextTick();
+
+    expect(layer.style.transform).toBe(before);
+    expect(wrapper.emitted('update:zoom')).toBeUndefined();
+
+    wrapper.unmount();
+  });
 });
