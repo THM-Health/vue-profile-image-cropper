@@ -80,7 +80,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   loading: [loading: boolean];
   error: [message: string];
-  /** Fired when the relative crop position changes (0–100 on each axis). */
+  /** Fired when the crop square moves on the image (0 = left/top, 100 = right/bottom). */
   position: [position: CropPosition];
 }>();
 
@@ -129,7 +129,7 @@ watch(
  * Emits the crop position to the parent component.
  */
 watch(
-  () => cropper.getPositionPercent(),
+  () => cropper.getRelativeCropPosition(),
   (position) => {
     if (loading.value || !cropper.viewportWidth || !cropper.viewportHeight) {
       return;
@@ -346,7 +346,7 @@ defineExpose({
     viewportWidth: cropper.viewportWidth,
     viewportHeight: cropper.viewportHeight,
     cropSize: cropper.viewportCrop.size,
-    position: { ...cropper.getPositionPercent() },
+    position: { ...cropper.getRelativeCropPosition() },
     zoom: cropper.zoom,
     sourceW: cropper.sourceWidth,
     sourceH: cropper.sourceHeight,

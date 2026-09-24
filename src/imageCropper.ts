@@ -5,7 +5,7 @@
  *
  * ## Mental model
  *
- * The crop region is a **square** (`cropSize` × `cropSize`). The circle is CSS-only.
+ * The crop square is `cropSize` × `cropSize`. A circular shape is CSS-only.
  *
  * **Crop space** (all pan/zoom logic lives here) — mathematical axes:
  * - Origin at the **center** of the crop square: (0, 0)
@@ -116,7 +116,7 @@ export class ImageCropper {
   private _displayUrl: string | null = null;
 
   /**
-   * Get the object URL to show the original image in the crop area
+   * Get the object URL to show the original image in the crop square
    */
   get displayUrl(): string | null {
     return this._displayUrl;
@@ -292,23 +292,28 @@ export class ImageCropper {
   }
 
   /**
-   * Relative position within the pan range (0–100).
-   * 0 = left / top limit, 100 = right / bottom limit. `null` when an axis cannot pan.
+   * Where the crop square sits on the image, as a percent of the pan range (0–100).
+   * 0 = crop shows the left / top edge, 100 = crop shows the right / bottom edge.
+   * `null` when an axis cannot pan.
+   *
+   * Image center and crop square move in opposite directions: shifting the image
+   * right (`imageX` toward `maxX`) reveals the left of the source.
    */
-  getPositionPercent(): CropPositionPercent {
+  getRelativeCropPosition(): CropPositionPercent {
     const { minX, maxX, minY, maxY } = this.imagePositionBounds;
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
 
     return {
-      x: rangeX <= 0 ? null : clamp(((this.imageX - minX) / rangeX) * 100, 0, 100),
-      // Top (maxY) → 0, bottom (minY) → 100
-      y: rangeY <= 0 ? null : clamp(((maxY - this.imageY) / rangeY) * 100, 0, 100),
+      // imageX at max (image shifted right) → crop shows the left edge → 0
+      x: rangeX <= 0 ? null : clamp(((maxX - this.imageX) / rangeX) * 100, 0, 100),
+      // imageY at min (image shifted down; +y is up) → crop shows the top edge → 0
+      y: rangeY <= 0 ? null : clamp(((this.imageY - minY) / rangeY) * 100, 0, 100),
     };
   }
 
   /**
-   * Map the visible crop window to source-image pixels for export.
+   * Map the visible crop square to source-image pixels for export.
    * Clamps so the rect stays inside the bitmap (e.g. floating-point drift).
    */
   getSourceCropRect(): SourceCropRect {
