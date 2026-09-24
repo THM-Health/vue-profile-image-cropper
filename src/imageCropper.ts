@@ -292,18 +292,23 @@ export class ImageCropper {
   }
 
   /**
-   * Relative position within the pan range (0–100).
-   * 0 = left / top limit, 100 = right / bottom limit. `null` when an axis cannot pan.
+   * Where the crop window sits on the image, as a percent of the pan range (0–100).
+   * 0 = crop shows the left / top edge, 100 = crop shows the right / bottom edge.
+   * `null` when an axis cannot pan.
+   *
+   * Image center and crop window move in opposite directions: shifting the image
+   * right (`imageX` toward `maxX`) reveals the left of the source.
    */
-  getPositionPercent(): CropPositionPercent {
+  getRelativeCropPosition(): CropPositionPercent {
     const { minX, maxX, minY, maxY } = this.imagePositionBounds;
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
 
     return {
-      x: rangeX <= 0 ? null : clamp(((this.imageX - minX) / rangeX) * 100, 0, 100),
-      // Top (maxY) → 0, bottom (minY) → 100
-      y: rangeY <= 0 ? null : clamp(((maxY - this.imageY) / rangeY) * 100, 0, 100),
+      // imageX at max (image shifted right) → crop shows the left edge → 0
+      x: rangeX <= 0 ? null : clamp(((maxX - this.imageX) / rangeX) * 100, 0, 100),
+      // imageY at min (image shifted down; +y is up) → crop shows the top edge → 0
+      y: rangeY <= 0 ? null : clamp(((this.imageY - minY) / rangeY) * 100, 0, 100),
     };
   }
 

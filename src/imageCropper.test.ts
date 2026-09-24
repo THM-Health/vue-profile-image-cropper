@@ -189,9 +189,9 @@ describe('ImageCropper', () => {
     });
   });
 
-  describe('getPositionPercent', () => {
-    it('maps pan limits to 0–100 (left/top → 0, right/bottom → 100)', () => {
-      // Bounds ±100 X, ±50 Y
+  describe('getRelativeCropPosition', () => {
+    it('maps the crop window on the image to 0–100 (left/top → 0, right/bottom → 100)', () => {
+      // Bounds ±100 X, ±50 Y. Image center and crop window move in opposite directions.
       const opts = {
         sourceWidth: 400,
         sourceHeight: 300,
@@ -200,15 +200,21 @@ describe('ImageCropper', () => {
         zoom: 1.5,
       } as const;
 
-      expect(createCropper({ ...opts, imageX: -100, imageY: 50 }).getPositionPercent()).toEqual({
+      // Image at maxX / minY: crop shows the left and top edges.
+      expect(
+        createCropper({ ...opts, imageX: 100, imageY: -50 }).getRelativeCropPosition(),
+      ).toEqual({
         x: 0,
         y: 0,
       });
-      expect(createCropper({ ...opts, imageX: 100, imageY: -50 }).getPositionPercent()).toEqual({
+      // Image at minX / maxY: crop shows the right and bottom edges.
+      expect(
+        createCropper({ ...opts, imageX: -100, imageY: 50 }).getRelativeCropPosition(),
+      ).toEqual({
         x: 100,
         y: 100,
       });
-      expect(createCropper({ ...opts, imageX: 0, imageY: 0 }).getPositionPercent()).toEqual({
+      expect(createCropper({ ...opts, imageX: 0, imageY: 0 }).getRelativeCropPosition()).toEqual({
         x: 50,
         y: 50,
       });
@@ -222,7 +228,7 @@ describe('ImageCropper', () => {
           sourceHeight: 200,
           viewportWidth: 200,
           viewportHeight: 200,
-        }).getPositionPercent(),
+        }).getRelativeCropPosition(),
       ).toEqual({ x: null, y: null });
 
       // Landscape: only X can pan
@@ -234,7 +240,7 @@ describe('ImageCropper', () => {
           viewportHeight: 200,
           imageX: 0,
           imageY: 0,
-        }).getPositionPercent(),
+        }).getRelativeCropPosition(),
       ).toEqual({ x: 50, y: null });
     });
   });
