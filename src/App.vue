@@ -370,12 +370,3 @@ async function downloadCropped(): Promise<void> {
     </main>
   </div>
 </template>
-
-<style>
-.accuracy-viewport {
-  box-sizing: content-box;
-  width: 200px !important;
-  height: 200px !important;
-  aspect-ratio: auto !important;
-}
-</style>
