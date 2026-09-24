@@ -104,17 +104,13 @@ function onLoading(loading: boolean) {
 
 ### Events
 
-| Name       | Type           | Default | Required | Description                                                                |
-| ---------- | -------------- | ------- | -------- | -------------------------------------------------------------------------- |
-| `loading`  | `boolean`      | —       | no       | Fired when decode/load state changes (`true` while loading, then `false`). |
-| `error`    | `string`       | —       | no       | Fired when loading or cropping fails; payload is an error message.         |
-| `position` | `CropPosition` | —       | no       | Relative crop position (`x`/`y` 0–100, or `null` if that axis cannot pan). |
+| Name       | Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading`  | `boolean`      | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                              |
+| `error`    | `string`       | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                                      |
+| `position` | `CropPosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. <br><br>Can be used to announce the position for assistive technologies. |
 
-`CropResult`: `{ blob: Blob }` — use `URL.createObjectURL(result.blob)` for previews.
-
-`CropPosition`: `{ x: number | null; y: number | null }` — `null` means the axis is locked (e.g. at 1× zoom the image fills the crop). Use that in localized copy instead of announcing “0%”.
-
-Example:
+#### Example providing feedback on crop position for screen readers
 
 ```ts
 function cropAriaLabel(pos: CropPosition): string {
@@ -122,7 +118,7 @@ function cropAriaLabel(pos: CropPosition): string {
     return 'Crop fills the image. Zoom in to reposition.';
   }
   if (pos.x === null) {
-    return `Vertical position ${Math.round(pos.y!)} percent. Horizontal position fixed.`;
+    return `Vertical position ${Math.round(pos.y)} percent. Horizontal position fixed.`;
   }
   if (pos.y === null) {
     return `Horizontal position ${Math.round(pos.x)} percent. Vertical position fixed.`;
@@ -133,12 +129,10 @@ function cropAriaLabel(pos: CropPosition): string {
 
 ### Exposed methods
 
-Call via template ref:
-
-| Name           | Type                                | Description                                                                      |
-| -------------- | ----------------------------------- | -------------------------------------------------------------------------------- |
-| `cropImage`    | `() => Promise<CropResult \| null>` | Exports the current crop; emits `error` on failure. Returns `null` on failure.   |
-| `getCropState` | `() => object`                      | Snapshot including `position` (`x`/`y` 0–100), offsets, viewport W/H, crop size. |
+| Name                                         | Description                                                                                                                                                                 |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cropImage() => Promise<CropResult \| null>` | Exports the current crop; emits `error` on failure. Returns `null` on failure.<br><br>`CropResult`: `{ blob: Blob }` — use `URL.createObjectURL(result.blob)` for previews. |
+| `getCropState() => object`                   | Snapshot including `position` (`x`/`y` 0–100), offsets, viewport W/H, crop size.                                                                                            |
 
 ## Development
 
