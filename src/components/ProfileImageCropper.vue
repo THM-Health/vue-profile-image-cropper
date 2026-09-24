@@ -80,7 +80,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   loading: [loading: boolean];
   error: [message: string];
-  /** Fired when the crop window moves on the image (0 = left/top, 100 = right/bottom). */
+  /** Fired when the crop square moves on the image (0 = left/top, 100 = right/bottom). */
   position: [position: CropPosition];
 }>();
 

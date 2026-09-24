@@ -190,8 +190,8 @@ describe('ImageCropper', () => {
   });
 
   describe('getRelativeCropPosition', () => {
-    it('maps the crop window on the image to 0–100 (left/top → 0, right/bottom → 100)', () => {
-      // Bounds ±100 X, ±50 Y. Image center and crop window move in opposite directions.
+    it('maps the crop square on the image to 0–100 (left/top → 0, right/bottom → 100)', () => {
+      // Bounds ±100 X, ±50 Y. Image center and crop square move in opposite directions.
       const opts = {
         sourceWidth: 400,
         sourceHeight: 300,
