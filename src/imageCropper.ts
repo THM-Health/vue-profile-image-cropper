@@ -323,7 +323,7 @@ export class ImageCropper {
     const cropTopLeftX = -this.cropHalf;
     const cropTopLeftY = this.cropHalf;
 
-    const sx = -(imageTopLeftX - cropTopLeftX) / scale;
+    const sx = (cropTopLeftX - imageTopLeftX) / scale;
     const sy = (imageTopLeftY - cropTopLeftY) / scale;
     const sSize = this.cropSize / scale;
 
