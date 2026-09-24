@@ -5,7 +5,7 @@
     "type": "git",
     "url": "git+https://github.com/THM-Health/vue-profile-image-cropper.git"
   },
-  "description": "Unstyled Vue 3 circular profile image cropper",
+  "description": "Unstyled Vue 3 profile image cropper",
   "type": "module",
   "main": "./dist/vue-profile-image-cropper.js",
   "module": "./dist/vue-profile-image-cropper.js",

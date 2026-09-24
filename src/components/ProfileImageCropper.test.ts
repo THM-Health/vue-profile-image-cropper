@@ -53,6 +53,7 @@ type CropperExpose = {
 async function mountCropper(
   props: Record<string, unknown> = {},
   viewportSize = { width: 200, height: 200 },
+  attrs: Record<string, unknown> = {},
 ): Promise<VueWrapper> {
   const wrapper = mount(ProfileImageCropper, {
     props: {
@@ -60,6 +61,7 @@ async function mountCropper(
       zoom: 1,
       ...props,
     },
+    attrs,
     attachTo: document.body,
   });
 
@@ -89,7 +91,7 @@ describe('ProfileImageCropper', () => {
   });
 
   it('renders the viewport, preview image, and finishes loading', async () => {
-    const wrapper = await mountCropper({ viewportClass: 'test-viewport' });
+    const wrapper = await mountCropper({}, { width: 200, height: 200 }, { class: 'test-viewport' });
     const viewport = wrapper.get('[role="application"]');
 
     expect(viewport.classes()).toContain('test-viewport');
@@ -119,7 +121,7 @@ describe('ProfileImageCropper', () => {
     const wrapper = await mountCropper({ keyboardStep: 10 });
 
     const viewport = wrapper.get('[role="application"]');
-    const layer = wrapper.get('div[style*="will-change"]').element as HTMLElement;
+    const layer = wrapper.get('img[style*="will-change"]').element as HTMLElement;
     const before = layer.style.transform;
 
     await viewport.trigger('keydown', { key: 'ArrowUp' });
@@ -178,7 +180,7 @@ describe('ProfileImageCropper', () => {
       zoomStep: 0.1,
     });
     const viewport = wrapper.get('[role="application"]');
-    const layer = wrapper.get('div[style*="will-change"]').element as HTMLElement;
+    const layer = wrapper.get('img[style*="will-change"]').element as HTMLElement;
     const before = layer.style.transform;
 
     expect(viewport.attributes('aria-disabled')).toBe('true');

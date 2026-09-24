@@ -5,6 +5,8 @@ import CropSpaceDebug, { type CropSpaceSnapshot } from './components/CropSpaceDe
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
+const MIN_RADIUS = 0;
+const MAX_RADIUS = 50;
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const cropperRef = ref<InstanceType<typeof ProfileImageCropper> | null>(null);
@@ -12,6 +14,7 @@ const cropperRef = ref<InstanceType<typeof ProfileImageCropper> | null>(null);
 const selectedImage = ref<File | null>(null);
 const cropperKey = ref(0);
 const zoom = ref(MIN_ZOOM);
+const borderRadius = ref(MAX_RADIUS);
 const isCropping = ref(false);
 
 const previewUrl = ref<string | null>(null);
@@ -20,6 +23,12 @@ const statusMessage = ref('');
 const errorMessage = ref('');
 
 const hasImage = computed(() => selectedImage.value !== null);
+const cropRadius = computed(() => `${borderRadius.value}%`);
+const radiusLabel = computed(() => {
+  if (borderRadius.value === MIN_RADIUS) return 'Square';
+  if (borderRadius.value === MAX_RADIUS) return 'Circle';
+  return 'Rounded';
+});
 const isLoadingImage = ref(false);
 const showDebug = ref(false);
 const debugState = ref<CropSpaceSnapshot | null>(null);
@@ -59,9 +68,8 @@ const outputSize = 512;
 const mimeType = 'image/png';
 const quality = 1;
 const keyboardStep = 8;
-const rootClass = 'w-full max-w-md';
-const viewportClass =
-  'h-[200px] w-full max-h-[200px] rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]';
+const maskClass = `crop-radius shadow-[0_0_0_9999px_rgb(17_24_39_/_0.55)]`;
+const ringClass = `crop-radius border-2 border-white shadow-[inset_0_0_0_1px_rgb(17_24_39_/_0.35)]`;
 
 function openFilePicker(): void {
   fileInputRef.value?.click();
@@ -119,7 +127,7 @@ function onCrop(result: CropResult): void {
   previewUrl.value = URL.createObjectURL(result.blob);
   croppedBlob.value = result.blob;
   errorMessage.value = '';
-  statusMessage.value = `Cropped square image (${result.blob.type}, ${result.blob.size} bytes).`;
+  statusMessage.value = `Cropped image (${result.blob.type}, ${result.blob.size} bytes).`;
 }
 
 function onError(message: string): void {
@@ -203,7 +211,7 @@ async function downloadCropped(): Promise<void> {
 
         <div
           v-if="!selectedImage"
-          class="grid h-[200px] w-full max-h-[200px] max-w-md place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-100 p-6 text-center text-[0.95rem] leading-snug text-slate-500"
+          class="grid h-[200px] w-full max-h-[200px] place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-100 p-6 text-center text-[0.95rem] leading-snug text-slate-500"
         >
           Select an image to crop your profile photo
         </div>
@@ -221,10 +229,10 @@ async function downloadCropped(): Promise<void> {
           :mime-type="mimeType"
           :quality="quality"
           :keyboard-step="keyboardStep"
-          :root-class="rootClass"
-          :viewport-class="viewportClass"
-          mask-class="shadow-[0_0_0_9999px_rgb(17_24_39_/_0.55)]"
-          ring-class="border-2 border-white shadow-[inset_0_0_0_1px_rgb(17_24_39_/_0.35)]"
+          aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge."
+          class="h-[200px] w-full max-h-[200px] rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]"
+          :mask-class="maskClass"
+          :ring-class="ringClass"
           @error="onError"
           @loading="onLoading"
           @position="syncDebugState"
@@ -259,6 +267,27 @@ async function downloadCropped(): Promise<void> {
               Drag to reposition; scroll or press +/− to zoom; arrow keys to nudge. Zoom
               {{ MIN_ZOOM }}×–{{ MAX_ZOOM }}×.
             </p>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label
+              class="flex items-baseline justify-between text-sm font-semibold"
+              for="crop-radius"
+            >
+              Corner radius
+              <span class="font-medium tabular-nums text-slate-500">
+                {{ borderRadius }}% · {{ radiusLabel }}
+              </span>
+            </label>
+            <input
+              id="crop-radius"
+              class="w-full accent-teal-700 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              type="range"
+              v-model.number="borderRadius"
+              :min="MIN_RADIUS"
+              :max="MAX_RADIUS"
+              step="1"
+            />
           </div>
 
           <button
@@ -315,47 +344,23 @@ async function downloadCropped(): Promise<void> {
           >
             {{ statusMessage }}
           </p>
-          <p v-else class="mb-4 text-sm leading-snug text-slate-500">
-            The Crop button exports a square rectangular image. The circular mask is visual only and
-            is not baked into the result.
-          </p>
 
-          <div class="mb-4 grid max-w-md grid-cols-2 gap-4">
-            <figure class="m-0">
-              <figcaption class="mb-2 text-xs font-semibold text-slate-600">
-                Square export
-              </figcaption>
-              <div
-                class="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-100"
-              >
-                <img
-                  data-test="cropped-image"
-                  v-if="previewUrl"
-                  class="block size-full object-cover"
-                  :src="previewUrl"
-                  alt="Cropped square profile image"
-                />
-                <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
-              </div>
-            </figure>
-
-            <figure class="m-0">
-              <figcaption class="mb-2 text-xs font-semibold text-slate-600">
-                As a circular avatar
-              </figcaption>
-              <div
-                class="grid aspect-square w-full place-items-center overflow-hidden rounded-full border border-dashed border-slate-300 bg-slate-100"
-              >
-                <img
-                  v-if="previewUrl"
-                  class="block size-full object-cover"
-                  :src="previewUrl"
-                  alt="Cropped image shown in a circular avatar frame"
-                />
-                <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
-              </div>
-            </figure>
-          </div>
+          <figure class="m-0 mb-4 w-[200px]">
+            <figcaption class="mb-2 text-xs font-semibold text-slate-600">Preview</figcaption>
+            <div
+              data-test="crop-preview"
+              class="crop-radius grid aspect-square w-full place-items-center overflow-hidden border border-dashed border-slate-300 bg-slate-100"
+            >
+              <img
+                data-test="cropped-image"
+                v-if="previewUrl"
+                class="block size-full object-cover"
+                :src="previewUrl"
+                alt="Cropped profile image"
+              />
+              <span v-else class="p-2 text-center text-xs text-slate-400">No crop yet</span>
+            </div>
+          </figure>
 
           <button
             type="button"
@@ -370,3 +375,9 @@ async function downloadCropped(): Promise<void> {
     </main>
   </div>
 </template>
+
+<style>
+.crop-radius {
+  border-radius: v-bind(cropRadius);
+}
+</style>
