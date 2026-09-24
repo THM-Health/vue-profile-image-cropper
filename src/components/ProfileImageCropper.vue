@@ -376,7 +376,7 @@ defineExpose({
         cursor: disabled ? 'default' : 'move',
         pointerEvents: disabled ? 'none' : undefined,
       }"
-      @pointerdown="onPointerDown"
+      @pointerdown.prevent="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
