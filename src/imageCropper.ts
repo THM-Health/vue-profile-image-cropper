@@ -5,7 +5,7 @@
  *
  * ## Mental model
  *
- * The crop square is `cropSize` × `cropSize`. A circular shape is CSS-only.
+ * The crop is a **square** (`cropSize` × `cropSize`). A circular shape is optional CSS only.
  *
  * **Crop space** (all pan/zoom logic lives here) — mathematical axes:
  * - Origin at the **center** of the crop square: (0, 0)

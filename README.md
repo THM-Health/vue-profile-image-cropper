@@ -1,6 +1,8 @@
-# Vue 3 Circular Profile Image Cropper
+# Vue 3 Profile Image Cropper
 
 Minimal unstyled, accessible profile-image cropper for **Vue.js 3** with zero-runtime dependencies and small in size (< 12kB).
+
+The crop is a **square**, and `cropImage()` exports a square image. To show that square as a circle, set `border-radius: 50%` on the mask and ring (Tailwind: `rounded-full`). That CSS changes only the overlay. The exported image stays square.
 
 ## Install
 
@@ -59,10 +61,10 @@ function onLoading(loading: boolean) {
     :min-zoom="MIN_ZOOM"
     :max-zoom="MAX_ZOOM"
     :image="selectedImage"
-    root-class="w-full max-w-md"
-    viewport-class="h-[200px] w-full max-h-[200px] rounded-xl border bg-slate-100"
-    mask-class="shadow-[0_0_0_9999px_rgb(17_24_39_/_0.55)]"
-    ring-class="border-2 border-white"
+    aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge."
+    class="h-[200px] w-full max-h-[200px] max-w-md rounded-xl border bg-slate-100"
+    mask-class="rounded-full shadow-[0_0_0_9999px_rgb(17_24_39_/_0.55)]"
+    ring-class="rounded-full border-2 border-white"
     @loading="onLoading"
   />
 
@@ -81,26 +83,20 @@ function onLoading(loading: boolean) {
 
 ### Props
 
-| Name              | Type      | Default           | Required | Description                                                                                |
-| ----------------- | --------- | ----------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `image`           | `File`    | —                 | yes      | Source image. Fixed for the component lifetime — remount (e.g. `:key`) to load a new file. |
-| `zoom`            | `number`  | —                 | yes      | Zoom multiplier via `v-model:zoom` (typically `≥ 1`).                                      |
-| `minZoom`         | `number`  | `1`               | no       | Lower bound for wheel / `+` `−` zoom.                                                      |
-| `maxZoom`         | `number`  | `Infinity`        | no       | Upper bound for wheel / `+` `−` zoom.                                                      |
-| `zoomStep`        | `number`  | `0.1`             | no       | Zoom delta per wheel tick or `+` / `−` key.                                                |
-| `outputSize`      | `number`  | `512`             | no       | Edge length in pixels of the exported square image.                                        |
-| `mimeType`        | `string`  | `'image/jpeg'`    | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
-| `quality`         | `number`  | `0.92`            | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
-| `keyboardStep`    | `number`  | `8`               | no       | Arrow-key nudge distance in CSS pixels.                                                    |
-| `disabled`        | `boolean` | `false`           | no       | Disables pointer, wheel, and keyboard interactions on the viewport.                        |
-| `ariaLabel`       | `string`  | _(see component)_ | no       | Accessible label for the crop viewport.                                                    |
-| `rootClass`       | `string`  | —                 | no       | Class(es) on the root element.                                                             |
-| `viewportClass`   | `string`  | —                 | no       | Class(es) on the crop viewport (any size / aspect ratio).                                  |
-| `stageClass`      | `string`  | —                 | no       | Class(es) on the stage that clips the image.                                               |
-| `imageLayerClass` | `string`  | —                 | no       | Class(es) on the positioned image layer.                                                   |
-| `imageClass`      | `string`  | —                 | no       | Class(es) on the `<img>`.                                                                  |
-| `maskClass`       | `string`  | —                 | no       | Class(es) on the circular mask overlay.                                                    |
-| `ringClass`       | `string`  | —                 | no       | Class(es) on the circular ring outline.                                                    |
+| Name           | Type      | Default        | Required | Description                                                                                |
+| -------------- | --------- | -------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `image`        | `File`    | —              | yes      | Source image. Fixed for the component lifetime — remount (e.g. `:key`) to load a new file. |
+| `zoom`         | `number`  | —              | yes      | Zoom multiplier via `v-model:zoom` (typically `≥ 1`).                                      |
+| `minZoom`      | `number`  | `1`            | no       | Lower bound for wheel / `+` `−` zoom.                                                      |
+| `maxZoom`      | `number`  | `Infinity`     | no       | Upper bound for wheel / `+` `−` zoom.                                                      |
+| `zoomStep`     | `number`  | `0.1`          | no       | Zoom delta per wheel tick or `+` / `−` key.                                                |
+| `outputSize`   | `number`  | `512`          | no       | Edge length in pixels of the exported square image.                                        |
+| `mimeType`     | `string`  | `'image/jpeg'` | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
+| `quality`      | `number`  | `0.92`         | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
+| `keyboardStep` | `number`  | `8`            | no       | Arrow-key nudge distance in CSS pixels.                                                    |
+| `disabled`     | `boolean` | `false`        | no       | Disables pointer, wheel, and keyboard interactions on the viewport.                        |
+| `maskClass`    | `string`  | —              | no       | Class(es) on the crop-square mask. `rounded-full` shows it as a circle.                    |
+| `ringClass`    | `string`  | —              | no       | Class(es) on the crop-square outline. `rounded-full` draws a circle.                       |
 
 ### Events
 
