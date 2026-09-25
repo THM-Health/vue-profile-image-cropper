@@ -2,8 +2,6 @@
 
 Minimal unstyled, accessible profile-image cropper for **Vue.js 3** with zero-runtime dependencies and small in size (< 12kB).
 
-The crop is a **square**, and `cropImage()` exports a square image. To show that square as a circle, set `border-radius: 50%` on the mask and ring (Tailwind: `rounded-full`). That CSS changes only the overlay. The exported image stays square.
-
 ## Install
 
 ```bash
@@ -20,6 +18,7 @@ import { ProfileImageCropper, type CropResult } from '@thm-health/vue-profile-im
 
 Mount only when a `File` is available. Own zoom bounds and controls in the parent.
 Use `v-model:zoom` with optional `minZoom` / `maxZoom` / `zoomStep` for wheel and `+`/`−` zoom.
+The classes in this example are Tailwind CSS.
 
 ```vue
 <script setup lang="ts">
@@ -100,11 +99,11 @@ function onLoading(loading: boolean) {
 
 ### Events
 
-| Name       | Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loading`  | `boolean`      | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                              |
-| `error`    | `string`       | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                                      |
-| `position` | `CropPosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. <br><br>Can be used to announce the position for assistive technologies. |
+| Name       | Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading`  | `boolean`      | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                      |
+| `error`    | `string`       | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                              |
+| `position` | `CropPosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. Can be used to announce the position for assistive technologies. |
 
 #### Example providing feedback on crop position for screen readers
 
@@ -125,10 +124,34 @@ function cropAriaLabel(pos: CropPosition): string {
 
 ### Exposed methods
 
-| Name                                         | Description                                                                                                                                                                 |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cropImage() => Promise<CropResult \| null>` | Exports the current crop; emits `error` on failure. Returns `null` on failure.<br><br>`CropResult`: `{ blob: Blob }` — use `URL.createObjectURL(result.blob)` for previews. |
-| `getCropState() => object`                   | Snapshot including `position` (`x`/`y` 0–100), offsets, viewport W/H, crop size.                                                                                            |
+| Name                                         | Description                                                                                                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cropImage() => Promise<CropResult \| null>` | Exports the current crop; emits `error` on failure. Returns `null` on failure. `CropResult`: `{ blob: Blob }` — use `URL.createObjectURL(result.blob)` for previews. |
+| `getCropState() => object`                   | Snapshot including `position` (`x`/`y` 0–100), offsets, viewport W/H, crop size.                                                                                     |
+
+### Styling
+
+The cropper has no size of its own. Set a height and width with `class`, or it is not visible. `mask-class` dims the area outside the crop square, and `ring-class` draws its edge. The classes below are Tailwind CSS.
+
+```vue
+<ProfileImageCropper
+  class="h-[200px] w-full max-h-[200px] border"
+  mask-class="shadow-[0_0_0_9999px_rgb(0_0_0_/_0.55)]"
+  ring-class="border-2 border-white"
+/>
+```
+
+#### Circle
+
+`cropImage()` always exports a square image. To show the crop square as a circle, set `border-radius: 50%` on the mask and ring (Tailwind: `rounded-full`). That CSS changes only the overlay.
+
+```vue
+<ProfileImageCropper
+  class="h-[200px] w-full max-h-[200px] border"
+  mask-class="rounded-full shadow-[0_0_0_9999px_rgb(0_0_0_/_0.55)]"
+  ring-class="rounded-full border-2 border-white"
+/>
+```
 
 ## Development
 
