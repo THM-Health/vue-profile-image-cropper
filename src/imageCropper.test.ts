@@ -246,6 +246,18 @@ describe('ImageCropper', () => {
   });
 
   describe('anchor, pan, and zoom', () => {
+    it('throws error when zoom is set below 1', () => {
+      const cropper = createCropper({
+        sourceWidth: 200,
+        sourceHeight: 200,
+        viewportWidth: 200,
+        viewportHeight: 200,
+      });
+
+      expect(() => cropper.setZoom(0.9)).toThrow('Zoom cannot be less than 1.0');
+      expect(cropper.zoom).toBe(1);
+    });
+
     it('centers the image and anchor on the first setViewport', () => {
       const cropper = new ImageCropper();
       cropper.sourceWidth = 800;

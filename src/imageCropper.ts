@@ -357,11 +357,6 @@ export class ImageCropper {
     // Update the anchor position
     // Anchor is the point in the source image that is kept under the crop center
     const { width, height, scale } = this.display;
-    if (!scale) {
-      this.anchorSourceX = 0;
-      this.anchorSourceY = 0;
-      return;
-    }
     this.anchorSourceX = (width / 2 - this.imageX) / scale;
     this.anchorSourceY = (this.imageY + height / 2) / scale;
   }
@@ -378,6 +373,11 @@ export class ImageCropper {
    * If zoom-out clamping shifts the image, the anchor is updated to match.
    */
   setZoom(zoom: number): void {
+    // Do not allow setting zoom below 1.0
+    if (zoom < 1.0) {
+      throw new Error('Zoom cannot be less than 1.0');
+    }
+
     if (zoom === this.zoom) return;
     this.zoom = zoom;
     this.applyAnchor();
