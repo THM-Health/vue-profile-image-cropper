@@ -259,12 +259,10 @@ export class ImageCropper {
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    if (mimeType === 'image/jpeg' || mimeType === 'image/webp') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, outputSize, outputSize);
-    } else {
-      ctx.clearRect(0, 0, outputSize, outputSize);
-    }
+
+    // Set a white background to avoid transparency in png exports
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outputSize, outputSize);
 
     const { x: sx, y: sy, size: sSize } = this.getSourceCropRect();
     ctx.drawImage(source, sx, sy, sSize, sSize, 0, 0, outputSize, outputSize);
