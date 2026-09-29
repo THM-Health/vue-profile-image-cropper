@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import ProfileImageCropper, { type CropResult } from './components/ProfileImageCropper.vue';
-import CropSpaceDebug, { type CropSpaceSnapshot } from './components/CropSpaceDebug.vue';
+import CropSpaceDebug from './components/CropSpaceDebug.vue';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
@@ -31,38 +31,6 @@ const radiusLabel = computed(() => {
 });
 const isLoadingImage = ref(false);
 const showDebug = ref(false);
-const debugState = ref<CropSpaceSnapshot | null>(null);
-
-function syncDebugState(): void {
-  const state = cropperRef.value?.getCropState();
-  if (!state) {
-    debugState.value = null;
-    return;
-  }
-  debugState.value = {
-    imageX: state.imageX,
-    imageY: state.imageY,
-    anchorSourceX: state.anchorSourceX,
-    anchorSourceY: state.anchorSourceY,
-    cropSize: state.cropSize,
-    displayW: state.displayW,
-    displayH: state.displayH,
-    displayScale: state.displayScale,
-    zoom: state.zoom,
-    sourceW: state.sourceW,
-    sourceH: state.sourceH,
-    minX: state.minX,
-    maxX: state.maxX,
-    minY: state.minY,
-    maxY: state.maxY,
-  };
-}
-
-watch([showDebug, zoom, selectedImage, isLoadingImage], async () => {
-  if (!showDebug.value) return;
-  await nextTick();
-  syncDebugState();
-});
 
 const outputSize = 512;
 const mimeType = 'image/png';
@@ -105,7 +73,6 @@ function clearSelectedImage(): void {
   selectedImage.value = null;
   zoom.value = MIN_ZOOM;
   isLoadingImage.value = false;
-  debugState.value = null;
   if (previewUrl.value?.startsWith('blob:')) {
     URL.revokeObjectURL(previewUrl.value);
   }
@@ -235,7 +202,6 @@ async function downloadCropped(): Promise<void> {
           :ring-class="ringClass"
           @error="onError"
           @loading="onLoading"
-          @position="syncDebugState"
         />
 
         <div class="mt-4 flex flex-col gap-3.5">
@@ -320,7 +286,7 @@ async function downloadCropped(): Promise<void> {
           aria-labelledby="debug-heading"
         >
           <h2 id="debug-heading" class="mb-4 mt-0 text-base font-bold">Debug</h2>
-          <CropSpaceDebug :state="debugState" />
+          <CropSpaceDebug :cropper="cropperRef?.cropper ?? null" />
         </section>
 
         <section

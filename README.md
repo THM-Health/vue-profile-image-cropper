@@ -99,18 +99,18 @@ function onLoading(loading: boolean) {
 
 ### Events
 
-| Name       | Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loading`  | `boolean`      | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                      |
-| `error`    | `string`       | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                              |
-| `position` | `CropPosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. Can be used to announce the position for assistive technologies. |
+| Name       | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading`  | `boolean`            | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                      |
+| `error`    | `string`             | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                              |
+| `position` | `CropSquarePosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. Can be used to announce the position for assistive technologies. |
 
 ### Exposed methods
 
 | Name                                         | Description                                                                                                                                                          |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cropImage() => Promise<CropResult \| null>` | Exports the current crop; emits `error` on failure. Returns `null` on failure. `CropResult`: `{ blob: Blob }` — use `URL.createObjectURL(result.blob)` for previews. |
-| `getCropState() => object`                   | Snapshot including `position` (`x`/`y` 0–100), offsets, viewport W/H, crop size.                                                                                     |
+| `cropper`                                    | (Internal) `ImageCropper` instance (zoom, pan, viewport, and source geometry). Does not allow Semantic Versioning                                                    |
 
 ### Styling
 
@@ -178,15 +178,15 @@ Set `aria-label` so screen reader users know how to control the cropper.
 />
 ```
 
-You can also announce the crop position and zoom in a live region. `position` is a `CropPosition`: `x` and `y` are 0–100, or `null` when that axis cannot move.
+You can also announce the crop position and zoom in a live region. `position` is a `CropSquarePosition`: `x` and `y` are 0–100, or `null` when that axis cannot move.
 
 ```vue
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { type CropPosition } from '@thm-health/vue-profile-image-cropper';
+import { type CropSquarePosition } from '@thm-health/vue-profile-image-cropper';
 
 const zoom = ref(1);
-const position = ref<CropPosition>({ x: null, y: null });
+const position = ref<CropSquarePosition>({ x: null, y: null });
 
 const ariaPosition = computed(() => {
   const zoomText = `Zoom ${Math.round(zoom.value * 100)} percent.`;
