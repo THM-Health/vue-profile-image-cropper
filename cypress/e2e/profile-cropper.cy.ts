@@ -34,9 +34,8 @@ describe('Profile image cropper demo', () => {
 
     cy.contains('button', 'Crop').should('not.be.disabled').click();
 
-    cy.contains(/Cropped square image/).should('be.visible');
-    cy.get('img[alt="Cropped square profile image"]').should('be.visible');
-    cy.get('img[alt="Cropped image shown in a circular avatar frame"]').should('be.visible');
+    cy.get('[data-test="crop-preview"]').should('have.length', 1);
+    cy.get('img[alt="Cropped profile image"]').should('be.visible');
     cy.contains('button', 'Download cropped image').should('not.be.disabled');
   });
 
@@ -100,7 +99,6 @@ describe('Profile image cropper demo', () => {
       .type('{rightarrow}{rightarrow}{rightarrow}{leftarrow}{downarrow}{downarrow}{uparrow}');
 
     cy.contains('button', 'Crop').click();
-    cy.contains(/Cropped square image/);
 
     cy.get('[data-test="cropped-image"]')
       .should('be.visible')

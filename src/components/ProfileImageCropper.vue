@@ -45,14 +45,9 @@ const props = withDefaults(
     keyboardStep?: number;
     /** When true, pointer, wheel, and keyboard interactions are ignored. */
     disabled?: boolean;
-    /** Accessible label for the crop viewport. */
-    ariaLabel?: string;
-    rootClass?: string;
-    viewportClass?: string;
-    stageClass?: string;
-    imageLayerClass?: string;
-    imageClass?: string;
+    /** Class(es) on the crop-square mask. */
     maskClass?: string;
+    /** Class(es) on the crop-square outline. */
     ringClass?: string;
   }>(),
   {
@@ -64,14 +59,6 @@ const props = withDefaults(
     quality: 0.92,
     keyboardStep: 8,
     disabled: false,
-    ariaLabel:
-      'Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge.',
-    ariaRoleDescription: 'Image cropper',
-    rootClass: undefined,
-    viewportClass: undefined,
-    stageClass: undefined,
-    imageLayerClass: undefined,
-    imageClass: undefined,
     maskClass: undefined,
     ringClass: undefined,
   },
@@ -84,6 +71,7 @@ const emit = defineEmits<{
   position: [position: CropPosition];
 }>();
 
+/** Non-prop attributes, including `class`, are bound onto the viewport. */
 const attrs = useAttrs();
 
 const viewportRef = ref<HTMLElement | null>(null);
@@ -91,15 +79,19 @@ const loading = ref(true);
 /** Tracks root field writes (imageX, zoom, displayUrl, …) without deeply proxying the canvas. */
 const cropper = shallowReactive(new ImageCropper());
 
-const imageLayerStyle = computed(() => ({
+const imageStyle = computed(() => ({
   position: 'absolute' as const,
   top: '0',
   left: '0',
+  display: 'block',
   width: `${cropper.display.width}px`,
   height: `${cropper.display.height}px`,
+  maxWidth: 'none',
   transform: `translate(${cropper.viewportImage.x}px, ${cropper.viewportImage.y}px)`,
   transformOrigin: '0 0',
   willChange: 'transform',
+  pointerEvents: 'none' as const,
+  userSelect: 'none' as const,
 }));
 
 /**
@@ -359,78 +351,57 @@ defineExpose({
 </script>
 
 <template>
-  <div :class="rootClass" v-bind="attrs">
-    <div
-      ref="viewportRef"
-      :class="viewportClass"
-      role="application"
-      :tabindex="disabled ? -1 : 0"
-      :aria-label="ariaLabel"
-      :aria-disabled="disabled || undefined"
-      :style="{
-        position: 'relative',
-        overflow: 'hidden',
-        touchAction: 'none',
-        userSelect: 'none',
-        outline: 'none',
-        cursor: disabled ? 'default' : 'move',
-        pointerEvents: disabled ? 'none' : undefined,
-      }"
-      @pointerdown.prevent="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerCancel"
-      @pointerleave="onPointerLeave"
-      @wheel="onWheel"
-      @keydown="onViewportKeydown"
-    >
-      <div
-        :class="stageClass"
-        aria-hidden="true"
-        :style="{ position: 'absolute', inset: '0', overflow: 'hidden' }"
-      >
-        <div :class="imageLayerClass" :style="imageLayerStyle">
-          <img
-            v-if="cropper.displayUrl"
-            :class="imageClass"
-            :src="cropper.displayUrl"
-            aria-hidden="true"
-            :style="{
-              display: 'block',
-              width: '100%',
-              height: '100%',
-              maxWidth: 'none',
-              pointerEvents: 'none',
-              userSelect: 'none',
-            }"
-          />
-        </div>
+  <div
+    ref="viewportRef"
+    v-bind="attrs"
+    role="application"
+    :tabindex="disabled ? -1 : 0"
+    :aria-disabled="disabled || undefined"
+    :style="{
+      position: 'relative',
+      overflow: 'hidden',
+      touchAction: 'none',
+      userSelect: 'none',
+      outline: 'none',
+      cursor: disabled ? 'default' : 'move',
+      pointerEvents: disabled ? 'none' : undefined,
+    }"
+    @pointerdown.prevent="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerCancel"
+    @pointerleave="onPointerLeave"
+    @wheel="onWheel"
+    @keydown="onViewportKeydown"
+  >
+    <img
+      v-if="cropper.displayUrl"
+      :src="cropper.displayUrl"
+      aria-hidden="true"
+      :style="imageStyle"
+    />
 
-        <div
-          :class="maskClass"
-          :style="{
-            position: 'absolute',
-            left: `${cropper.viewportCrop.x}px`,
-            top: `${cropper.viewportCrop.y}px`,
-            width: `${cropper.viewportCrop.size}px`,
-            height: `${cropper.viewportCrop.size}px`,
-            borderRadius: '50%',
-            pointerEvents: 'none',
-          }"
-        />
-        <div
-          :class="ringClass"
-          :style="{
-            position: 'absolute',
-            left: `${cropper.viewportCrop.x}px`,
-            top: `${cropper.viewportCrop.y}px`,
-            width: `${cropper.viewportCrop.size}px`,
-            height: `${cropper.viewportCrop.size}px`,
-            borderRadius: '50%',
-            pointerEvents: 'none',
-          }"
-        />
-      </div>
-    </div>
+    <div
+      :class="maskClass"
+      :style="{
+        position: 'absolute',
+        left: `${cropper.viewportCrop.x}px`,
+        top: `${cropper.viewportCrop.y}px`,
+        width: `${cropper.viewportCrop.size}px`,
+        height: `${cropper.viewportCrop.size}px`,
+        pointerEvents: 'none',
+      }"
+    />
+    <div
+      :class="ringClass"
+      :style="{
+        position: 'absolute',
+        left: `${cropper.viewportCrop.x}px`,
+        top: `${cropper.viewportCrop.y}px`,
+        width: `${cropper.viewportCrop.size}px`,
+        height: `${cropper.viewportCrop.size}px`,
+        pointerEvents: 'none',
+      }"
+    />
   </div>
 </template>
