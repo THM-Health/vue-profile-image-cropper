@@ -1,13 +1,10 @@
 export { default as ProfileImageCropper } from './components/ProfileImageCropper.vue';
-export type { CropPosition } from './components/ProfileImageCropper.vue';
+export type { CropSquarePosition } from './components/ProfileImageCropper.vue';
 export { ImageCropper } from './imageCropper';
 export type {
+  Style,
   CropExportOptions,
-  ViewportCrop,
-  CropPositionPercent,
+  CropSquarePositionPercent,
   CropResult,
-  DisplaySize,
   ImagePositionBounds,
-  Point,
-  SourceCropRect,
 } from './imageCropper';

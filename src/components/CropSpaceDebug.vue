@@ -1,43 +1,54 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-
-export interface CropSpaceSnapshot {
-  imageX: number;
-  imageY: number;
-  anchorSourceX: number;
-  anchorSourceY: number;
-  cropSize: number;
-  displayW: number;
-  displayH: number;
-  displayScale: number;
-  zoom: number;
-  sourceW: number;
-  sourceH: number;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
+import type { ImageCropper } from '../imageCropper';
 
 const props = defineProps<{
-  state: CropSpaceSnapshot | null;
+  cropper: ImageCropper | null;
 }>();
+
+const state = computed(() => {
+  const cropper = props.cropper;
+  if (!cropper) return null;
+
+  const { width, height } = cropper.imageStyle;
+  const scale = cropper.sourceImageWidth ? width / cropper.sourceImageWidth : cropper.zoom;
+  const bounds = cropper.imagePositionBounds;
+  const cropSquareSize = cropper.cropSquareStyle.width;
+
+  return {
+    imageX: cropper.imageX,
+    imageY: cropper.imageY,
+    sourceImageAnchorX: cropper.sourceImageAnchorX,
+    sourceImageAnchorY: cropper.sourceImageAnchorY,
+    cropSquareSize,
+    displayW: width,
+    displayH: height,
+    displayScale: scale,
+    zoom: cropper.zoom,
+    sourceImageWidth: cropper.sourceImageWidth,
+    sourceImageHeight: cropper.sourceImageHeight,
+    minX: bounds.minX,
+    maxX: bounds.maxX,
+    minY: bounds.minY,
+    maxY: bounds.maxY,
+  };
+});
 
 const PAD_RATIO = 0.15;
 
 const mapped = computed(() => {
-  const s = props.state;
-  if (!s || !s.cropSize) return null;
+  const s = state.value;
+  if (!s || !s.cropSquareSize) return null;
 
-  const half = s.cropSize / 2;
+  const half = s.cropSquareSize / 2;
   const imageCenter = { x: s.imageX, y: s.imageY };
   const imageTL = {
     x: s.imageX - s.displayW / 2,
     y: s.imageY + s.displayH / 2,
   };
   const anchor = {
-    x: imageTL.x + s.anchorSourceX * s.displayScale,
-    y: imageTL.y - s.anchorSourceY * s.displayScale,
+    x: imageTL.x + s.sourceImageAnchorX * s.displayScale,
+    y: imageTL.y - s.sourceImageAnchorY * s.displayScale,
   };
 
   // Content radius, then pad so axes read as “infinite” past the scene
@@ -236,8 +247,8 @@ function tickLabel(n: number): string {
           <rect
             :x="-mapped.half"
             :y="-mapped.half"
-            :width="state.cropSize"
-            :height="state.cropSize"
+            :width="state.cropSquareSize"
+            :height="state.cropSquareSize"
             fill="#2563eb"
             fill-opacity="0.12"
             stroke="#1d4ed8"
@@ -352,7 +363,7 @@ function tickLabel(n: number): string {
           <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <dt class="text-slate-500">anchor (source px)</dt>
             <dd class="m-0 mt-0.5 text-sm font-semibold">
-              ({{ fmt(state.anchorSourceX) }}, {{ fmt(state.anchorSourceY) }})
+              ({{ fmt(state.sourceImageAnchorX) }}, {{ fmt(state.sourceImageAnchorY) }})
             </dd>
           </div>
           <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -369,7 +380,7 @@ function tickLabel(n: number): string {
           </div>
           <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <dt class="text-slate-500">crop size</dt>
-            <dd class="m-0 mt-0.5 text-sm font-semibold">{{ fmt(state.cropSize) }}</dd>
+            <dd class="m-0 mt-0.5 text-sm font-semibold">{{ fmt(state.cropSquareSize) }}</dd>
           </div>
           <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <dt class="text-slate-500">display size</dt>
@@ -386,7 +397,7 @@ function tickLabel(n: number): string {
           <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <dt class="text-slate-500">source</dt>
             <dd class="m-0 mt-0.5 text-sm font-semibold">
-              {{ state.sourceW }}×{{ state.sourceH }}
+              {{ state.sourceImageWidth }}×{{ state.sourceImageHeight }}
             </dd>
           </div>
         </dl>
