@@ -2,6 +2,7 @@
  * Image cropper
  *
  * Contains all logic and math for cropping an image.
+ * The crop square has a fixed position and size. Only the image is moved and scaled.
  *
  * ## Mental model
  *

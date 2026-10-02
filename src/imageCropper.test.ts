@@ -273,8 +273,8 @@ describe('ImageCropper', () => {
   describe('anchor, pan, and zoom', () => {
     it('throws error when zoom is set below 1', () => {
       const cropper = createCropper({
-        sourceWidth: 200,
-        sourceHeight: 200,
+        sourceImageWidth: 200,
+        sourceImageHeight: 200,
         viewportWidth: 200,
         viewportHeight: 200,
       });

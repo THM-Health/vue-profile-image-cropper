@@ -110,7 +110,7 @@ function onLoading(loading: boolean) {
 | Name                                         | Description                                                                                                                                                          |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cropImage() => Promise<CropResult \| null>` | Exports the current crop; emits `error` on failure. Returns `null` on failure. `CropResult`: `{ blob: Blob }` — use `URL.createObjectURL(result.blob)` for previews. |
-| `cropper`                                    | (Internal) `ImageCropper` instance (zoom, pan, viewport, and source geometry). Does not allow Semantic Versioning                                                    |
+| `cropper`                                    | (Internal) `ImageCropper` instance (zoom, pan, viewport, and source geometry). Does not follow Semantic Versioning                                                   |
 
 ### Styling
 
