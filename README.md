@@ -60,7 +60,7 @@ function onLoading(loading: boolean) {
     :min-zoom="MIN_ZOOM"
     :max-zoom="MAX_ZOOM"
     :image="selectedImage"
-    aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge."
+    aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to move the image."
     class="h-[200px] w-full max-h-[200px] max-w-md rounded-xl border bg-slate-100"
     mask-class="rounded-full shadow-[0_0_0_9999px_rgb(17_24_39_/_0.55)]"
     ring-class="rounded-full border-2 border-white"
@@ -92,35 +92,18 @@ function onLoading(loading: boolean) {
 | `outputSize`   | `number`  | `512`          | no       | Edge length in pixels of the exported square image.                                        |
 | `mimeType`     | `string`  | `'image/jpeg'` | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
 | `quality`      | `number`  | `0.92`         | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
-| `keyboardStep` | `number`  | `8`            | no       | Arrow-key nudge distance in CSS pixels.                                                    |
+| `keyboardStep` | `number`  | `8`            | no       | Arrow-key move distance in CSS pixels.                                                     |
 | `disabled`     | `boolean` | `false`        | no       | Disables pointer, wheel, and keyboard interactions on the viewport.                        |
 | `maskClass`    | `string`  | —              | no       | Class(es) on the crop-square mask.                                                         |
 | `ringClass`    | `string`  | —              | no       | Class(es) on the crop-square outline.                                                      |
 
 ### Events
 
-| Name       | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loading`  | `boolean`            | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                      |
-| `error`    | `string`             | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                              |
-| `position` | `CropSquarePosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. Can be used to announce the position for assistive technologies. |
-
-#### Example providing feedback on crop position for screen readers
-
-```ts
-function cropAriaLabel(pos: CropPosition): string {
-  if (pos.x === null && pos.y === null) {
-    return 'Crop fills the image. Zoom in to reposition.';
-  }
-  if (pos.x === null) {
-    return `Vertical position ${Math.round(pos.y)} percent. Horizontal position fixed.`;
-  }
-  if (pos.y === null) {
-    return `Horizontal position ${Math.round(pos.x)} percent. Vertical position fixed.`;
-  }
-  return `Horizontal ${Math.round(pos.x)} percent, vertical ${Math.round(pos.y)} percent.`;
-}
-```
+| Name       | Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading`  | `boolean`      | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                      |
+| `error`    | `string`       | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                              |
+| `position` | `CropPosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. Can be used to announce the position for assistive technologies. |
 
 ### Exposed methods
 
@@ -131,9 +114,39 @@ function cropAriaLabel(pos: CropPosition): string {
 
 ### Styling
 
-The cropper has no size of its own. Set a height and width with `class`, or it is not visible. `mask-class` dims the area outside the crop square, and `ring-class` draws its edge. The classes below are Tailwind CSS.
+The cropper has no size of its own. Set a height and width with `class`, or it is not visible.
+`mask-class` dims the area outside the crop square, and `ring-class` draws its edge.
+Without those classes, the crop area is visually unrecognizable.
 
-```vue
+**Example**
+
+```html
+<ProfileImageCropper
+  class="profile-image-cropper"
+  mask-class="profile-image-cropper__mask"
+  ring-class="profile-image-cropper__ring"
+/>
+<style>
+  .profile-image-cropper {
+    height: 200px;
+    width: 100%;
+    max-height: 200px;
+    border: 1px solid;
+  }
+
+  .profile-image-cropper__mask {
+    box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.55);
+  }
+
+  .profile-image-cropper__ring {
+    border: 2px solid white;
+  }
+</style>
+```
+
+**Example with Tailwind CSS**
+
+```html
 <ProfileImageCropper
   class="h-[200px] w-full max-h-[200px] border"
   mask-class="shadow-[0_0_0_9999px_rgb(0_0_0_/_0.55)]"
@@ -145,12 +158,57 @@ The cropper has no size of its own. Set a height and width with `class`, or it i
 
 `cropImage()` always exports a square image. To show the crop square as a circle, set `border-radius: 50%` on the mask and ring (Tailwind: `rounded-full`). That CSS changes only the overlay.
 
-```vue
+```html
 <ProfileImageCropper
   class="h-[200px] w-full max-h-[200px] border"
   mask-class="rounded-full shadow-[0_0_0_9999px_rgb(0_0_0_/_0.55)]"
   ring-class="rounded-full border-2 border-white"
 />
+```
+
+## Accessibility
+
+The viewport has `role="application"` and is in the tab order unless `disabled` is true. With focus on the viewport, `+` and `−` change zoom by `zoomStep`, and the arrow keys moves the image under that square by `keyboardStep` pixels.
+
+Set `aria-label` so screen reader users know how to control the cropper.
+
+```html
+<ProfileImageCropper
+  aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to move the image."
+/>
+```
+
+You can also announce the crop position and zoom in a live region. `position` is a `CropPosition`: `x` and `y` are 0–100, or `null` when that axis cannot move.
+
+```vue
+<script setup lang="ts">
+import { computed, ref } from 'vue';
+import { type CropPosition } from '@thm-health/vue-profile-image-cropper';
+
+const zoom = ref(1);
+const position = ref<CropPosition>({ x: null, y: null });
+
+const ariaPosition = computed(() => {
+  const zoomText = `Zoom ${Math.round(zoom.value * 100)} percent.`;
+  if (position.value.x === null && position.value.y === null) {
+    return `Crop fills the image. ${zoomText} Zoom in to reposition.`;
+  }
+  const x =
+    position.value.x != null
+      ? `Horizontal position ${Math.round(position.value.x)} percent.`
+      : 'Horizontal position fixed.';
+  const y =
+    position.value.y != null
+      ? `Vertical position ${Math.round(position.value.y)} percent.`
+      : 'Vertical position fixed.';
+  return `${x} ${y} ${zoomText}`;
+});
+</script>
+
+<template>
+  <ProfileImageCropper v-model:zoom="zoom" @position="position = $event" />
+  <span aria-live="polite" aria-atomic="true" class="sr-only">{{ ariaPosition }}</span>
+</template>
 ```
 
 ## Development

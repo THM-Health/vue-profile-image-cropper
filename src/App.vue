@@ -229,7 +229,7 @@ async function downloadCropped(): Promise<void> {
           :mime-type="mimeType"
           :quality="quality"
           :keyboard-step="keyboardStep"
-          aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to nudge."
+          aria-label="Image crop area. Drag to reposition, scroll or press +/− to zoom, arrow keys to move the image."
           class="h-[200px] w-full max-h-[200px] rounded-xl border border-slate-300 bg-slate-100 focus-visible:shadow-[0_0_0_3px_#fff,0_0_0_6px_#2563eb]"
           :mask-class="maskClass"
           :ring-class="ringClass"
@@ -264,7 +264,7 @@ async function downloadCropped(): Promise<void> {
               @input="onZoomInput"
             />
             <p id="profile-zoom-hint" class="m-0 text-[0.8rem] leading-snug text-slate-500">
-              Drag to reposition; scroll or press +/− to zoom; arrow keys to nudge. Zoom
+              Drag to reposition; scroll or press +/− to zoom; arrow keys to move the image. Zoom
               {{ MIN_ZOOM }}×–{{ MAX_ZOOM }}×.
             </p>
           </div>
