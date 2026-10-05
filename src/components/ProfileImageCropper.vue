@@ -28,7 +28,7 @@ const zoom = defineModel<number>('zoom', { required: true });
 const props = withDefaults(
   defineProps<{
     /** Source image file (required; fixed for the lifetime of the component). */
-    image: File;
+    image: File | HTMLImageElement;
     /** Minimum zoom for wheel / +/- controls. */
     minZoom?: number;
     /** Maximum zoom for wheel / +/- controls. */

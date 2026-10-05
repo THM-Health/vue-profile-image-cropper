@@ -116,7 +116,7 @@ export class ImageCropper {
    * Decode `image` with EXIF orientation applied, bake pixels to a canvas for preview
    * and export, and initialize crop geometry from the resulting dimensions.
    */
-  async loadImage(image: File): Promise<void> {
+  async loadImage(image: File | HTMLImageElement): Promise<void> {
     this.destroy();
 
     const bitmap = await createImageBitmap(image, { imageOrientation: 'from-image' });
