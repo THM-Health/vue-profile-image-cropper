@@ -1,49 +1,27 @@
 /**
  * Component tests for ProfileImageCropper.
- * Image decoding / canvas are mocked; focus is mount, export, and keyboard pan.
  */
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mount, type VueWrapper } from '@vue/test-utils';
+import { describe, expect, it } from 'vitest';
+import { imageSize } from 'image-size';
 import { nextTick } from 'vue';
 import ProfileImageCropper from './ProfileImageCropper.vue';
 
-/** Minimal valid 1×1 PNG (pixel size is overridden by createImageBitmap mock). */
-const TINY_PNG = Uint8Array.from(
-  atob(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  ),
-  (char) => char.charCodeAt(0),
-);
-
-function createImageFile(name = 'portrait.png'): File {
-  return new File([TINY_PNG], name, { type: 'image/png' });
-}
-
-/** Stub bitmap decode + canvas so tests do not depend on real image decoding. */
-function mockImagePipeline(width = 120, height = 180): void {
-  vi.stubGlobal(
-    'createImageBitmap',
-    vi.fn(async () => ({
-      width,
-      height,
-      close: vi.fn(),
-    })),
+async function createImageFile(): Promise<HTMLImageElement> {
+  const bytes = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../../cypress/fixtures/profile.png'),
   );
+  const dataUrl = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
 
-  HTMLCanvasElement.prototype.getContext = vi.fn(() => {
-    return {
-      imageSmoothingEnabled: true,
-      imageSmoothingQuality: 'high',
-      fillStyle: '',
-      clearRect: vi.fn(),
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
-    } as unknown as CanvasRenderingContext2D;
-  }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-  HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string) {
-    callback(new Blob(['cropped'], { type: type ?? 'image/jpeg' }));
-  };
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to decode fixture image.'));
+    image.src = dataUrl;
+  });
 }
 
 type CropperExpose = {
@@ -57,7 +35,7 @@ async function mountCropper(
 ): Promise<VueWrapper> {
   const wrapper = mount(ProfileImageCropper, {
     props: {
-      image: createImageFile(),
+      image: await createImageFile(),
       zoom: 1,
       ...props,
     },
@@ -75,21 +53,16 @@ async function mountCropper(
     value: viewportSize.height,
   });
 
-  await flushPromises();
-  await nextTick();
+  let loaded = false;
+  while (!loaded) {
+    loaded = wrapper.emitted('loading')?.at(-1)?.[0] === false;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
   return wrapper;
 }
 
 describe('ProfileImageCropper', () => {
-  beforeEach(() => {
-    mockImagePipeline();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
   it('renders the viewport, preview image, and finishes loading', async () => {
     const wrapper = await mountCropper({}, { width: 200, height: 200 }, { class: 'test-viewport' });
     const viewport = wrapper.get('[role="application"]');
@@ -117,8 +90,7 @@ describe('ProfileImageCropper', () => {
   });
 
   it('pans the image layer when arrow keys are pressed', async () => {
-    // Default mock is a portrait source → vertical pan is available at zoom 1
-    const wrapper = await mountCropper({ keyboardStep: 10 });
+    const wrapper = await mountCropper({ zoom: 2, keyboardStep: 10 });
 
     const viewport = wrapper.get('[role="application"]');
     const layer = wrapper.get('img[style*="will-change"]').element as HTMLElement;
