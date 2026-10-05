@@ -201,6 +201,7 @@ function onPointerDown(event: PointerEvent): void {
   if (interactionsLocked.value || event.button !== 0) return;
   // Save pointer id to only handle one pointer at a time
   dragPointerId.value = event.pointerId;
+  viewportRef.value?.setPointerCapture(event.pointerId);
 
   // Update last pointer position
   lastPointerX = event.clientX;
@@ -223,9 +224,17 @@ function onPointerMove(event: PointerEvent): void {
 }
 
 function endPointerDrag(event?: PointerEvent): void {
+  // Ignore other pointer movements than the one that started the drag
   if (event && dragPointerId.value !== null && event.pointerId !== dragPointerId.value) {
     return;
   }
+
+  // If no pointer id is set, ignore the event
+  if (dragPointerId.value === null) {
+    return;
+  }
+
+  viewportRef.value?.releasePointerCapture(dragPointerId.value);
   dragPointerId.value = null;
 }
 
@@ -234,10 +243,6 @@ function onPointerUp(event: PointerEvent): void {
 }
 
 function onPointerCancel(event: PointerEvent): void {
-  endPointerDrag(event);
-}
-
-function onPointerLeave(event: PointerEvent): void {
   endPointerDrag(event);
 }
 
@@ -356,7 +361,6 @@ defineExpose({
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
-    @pointerleave="onPointerLeave"
     @wheel="onWheel"
     @keydown="onViewportKeydown"
   >
