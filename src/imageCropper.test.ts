@@ -195,6 +195,23 @@ describe('ImageCropper', () => {
       expect(cropper.imageY).toBe(50);
     });
 
+    it('only allows pan on axis that can be panned', () => {
+      const cropper = createCropper({
+        sourceImageWidth: 400,
+        sourceImageHeight: 200,
+        viewportWidth: 200,
+        viewportHeight: 200,
+        zoom: 1,
+      });
+      expect(cropper.imageX).toBe(0);
+      expect(cropper.imageY).toBe(0);
+
+      // Pan on both axes, but only X can be panned
+      cropper.panBy(10, 50);
+      expect(cropper.imageX).toBe(10);
+      expect(cropper.imageY).toBe(0);
+    });
+
     it('resets the image center to (0, 0) on center()', () => {
       const cropper = createCropper({
         sourceImageWidth: 400,

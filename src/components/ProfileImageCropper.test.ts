@@ -86,6 +86,10 @@ describe('ProfileImageCropper', () => {
     expect(result?.blob).toBeInstanceOf(Blob);
     expect(result?.blob.type).toBe('image/png');
 
+    const dimensions = imageSize(new Uint8Array(await result!.blob.arrayBuffer()));
+    expect(dimensions.width).toBe(64);
+    expect(dimensions.height).toBe(64);
+
     wrapper.unmount();
   });
 
