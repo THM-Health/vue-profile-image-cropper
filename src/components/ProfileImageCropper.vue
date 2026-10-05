@@ -13,7 +13,7 @@ import { ImageCropper, type CropResult } from '../imageCropper';
 
 export type { CropResult };
 
-export interface CropPosition {
+export interface CropSquarePosition {
   /** 0 at left limit, 100 at right limit. `null` when X cannot be panned. */
   x: number | null;
   /** 0 at top limit, 100 at bottom limit. `null` when Y cannot be panned. */
@@ -68,7 +68,7 @@ const emit = defineEmits<{
   loading: [loading: boolean];
   error: [message: string];
   /** Fired when the crop square moves on the image (0 = left/top, 100 = right/bottom). */
-  position: [position: CropPosition];
+  position: [position: CropSquarePosition];
 }>();
 
 /** Non-prop attributes, including `class`, are bound onto the viewport. */
@@ -76,23 +76,26 @@ const attrs = useAttrs();
 
 const viewportRef = ref<HTMLElement | null>(null);
 const loading = ref(true);
-/** Tracks root field writes (imageX, zoom, displayUrl, …) without deeply proxying the canvas. */
+/** Tracks root field writes (imageX, zoom, sourceImageBlobURL, …) without deeply proxying the canvas. */
 const cropper = shallowReactive(new ImageCropper());
 
-const imageStyle = computed(() => ({
-  position: 'absolute' as const,
-  top: '0',
-  left: '0',
-  display: 'block',
-  width: `${cropper.display.width}px`,
-  height: `${cropper.display.height}px`,
-  maxWidth: 'none',
-  transform: `translate(${cropper.viewportImage.x}px, ${cropper.viewportImage.y}px)`,
-  transformOrigin: '0 0',
-  willChange: 'transform',
-  pointerEvents: 'none' as const,
-  userSelect: 'none' as const,
-}));
+const imageStyle = computed(() => {
+  const { x, y, width, height } = cropper.imageStyle;
+  return {
+    position: 'absolute' as const,
+    top: '0',
+    left: '0',
+    display: 'block',
+    width: `${width}px`,
+    height: `${height}px`,
+    maxWidth: 'none',
+    transform: `translate(${x}px, ${y}px)`,
+    transformOrigin: '0 0',
+    willChange: 'transform',
+    pointerEvents: 'none' as const,
+    userSelect: 'none' as const,
+  };
+});
 
 /**
  * Emits the loading state to the parent component.
@@ -121,7 +124,7 @@ watch(
  * Emits the crop position to the parent component.
  */
 watch(
-  () => cropper.getRelativeCropPosition(),
+  () => cropper.getRelativeCropSquarePosition(),
   (position) => {
     if (loading.value || !cropper.viewportWidth || !cropper.viewportHeight) {
       return;
@@ -158,8 +161,8 @@ onMounted(async () => {
     await nextTick();
     measureViewport();
 
-    // If browser supports ResizeObserver, use it to measure the viewport size.
-    // Otherwise, use window resize event to measure the viewport size.
+    // If browser supports ResizeObserver, use it to react to viewport size changes
+    // Otherwise, use window resize event to react to viewport size changes
     if (viewportRef.value && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => measureViewport());
       resizeObserver.observe(viewportRef.value);
@@ -329,24 +332,7 @@ async function cropImage(): Promise<CropResult | null> {
 
 defineExpose({
   cropImage,
-  getCropState: () => ({
-    imageX: cropper.imageX,
-    imageY: cropper.imageY,
-    anchorSourceX: cropper.anchorSourceX,
-    anchorSourceY: cropper.anchorSourceY,
-    viewportImage: { ...cropper.viewportImage },
-    viewportWidth: cropper.viewportWidth,
-    viewportHeight: cropper.viewportHeight,
-    cropSize: cropper.viewportCrop.size,
-    position: { ...cropper.getRelativeCropPosition() },
-    zoom: cropper.zoom,
-    sourceW: cropper.sourceWidth,
-    sourceH: cropper.sourceHeight,
-    displayScale: cropper.display.scale,
-    displayW: cropper.display.width,
-    displayH: cropper.display.height,
-    ...cropper.imagePositionBounds,
-  }),
+  cropper,
 });
 </script>
 
@@ -375,8 +361,8 @@ defineExpose({
     @keydown="onViewportKeydown"
   >
     <img
-      v-if="cropper.displayUrl"
-      :src="cropper.displayUrl"
+      v-if="cropper.sourceImageBlobURL"
+      :src="cropper.sourceImageBlobURL"
       aria-hidden="true"
       :style="imageStyle"
     />
@@ -385,10 +371,10 @@ defineExpose({
       :class="maskClass"
       :style="{
         position: 'absolute',
-        left: `${cropper.viewportCrop.x}px`,
-        top: `${cropper.viewportCrop.y}px`,
-        width: `${cropper.viewportCrop.size}px`,
-        height: `${cropper.viewportCrop.size}px`,
+        left: `${cropper.cropSquareStyle.x}px`,
+        top: `${cropper.cropSquareStyle.y}px`,
+        width: `${cropper.cropSquareStyle.width}px`,
+        height: `${cropper.cropSquareStyle.height}px`,
         pointerEvents: 'none',
       }"
     />
@@ -396,10 +382,10 @@ defineExpose({
       :class="ringClass"
       :style="{
         position: 'absolute',
-        left: `${cropper.viewportCrop.x}px`,
-        top: `${cropper.viewportCrop.y}px`,
-        width: `${cropper.viewportCrop.size}px`,
-        height: `${cropper.viewportCrop.size}px`,
+        left: `${cropper.cropSquareStyle.x}px`,
+        top: `${cropper.cropSquareStyle.y}px`,
+        width: `${cropper.cropSquareStyle.width}px`,
+        height: `${cropper.cropSquareStyle.height}px`,
         pointerEvents: 'none',
       }"
     />
