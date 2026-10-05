@@ -214,15 +214,15 @@ const ariaPosition = computed(() => {
 ## Development
 
 ```bash
-npm install
-npm run dev         # demo app
-npm run build       # library bundle + types → dist/
-npm run build:demo  # demo production build
-npm run lint
-npm run format
-npm run test        # Vitest unit tests
-npm run test:e2e    # Cypress against the demo (upload, zoom, pan, crop, debug)
-npm run check       # typecheck + lint + format + unit + lib build
+pnpm install
+pnpm dev         # demo app
+pnpm build       # library bundle + types → dist/
+pnpm build:demo  # demo production build
+pnpm lint
+pnpm format
+pnpm test        # Vitest unit tests
+pnpm test:e2e    # Cypress against the demo (upload, zoom, pan, crop, debug)
+pnpm check       # typecheck + lint + format + unit + lib build
 ```
 
 ## License
