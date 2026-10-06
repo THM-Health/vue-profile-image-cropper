@@ -185,8 +185,8 @@ onBeforeUnmount(() => {
  * Tracks the pointer and positions for dragging the image
  */
 const dragPointerId = ref<number | null>(null);
-let lastPointerX = 0;
-let lastPointerY = 0;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
 
 const interactionsLocked = computed(() => loading.value || props.disabled);
 
@@ -201,10 +201,12 @@ function onPointerDown(event: PointerEvent): void {
   if (interactionsLocked.value || event.button !== 0) return;
   // Save pointer id to only handle one pointer at a time
   dragPointerId.value = event.pointerId;
+  viewportRef.value?.setPointerCapture(event.pointerId);
 
-  // Update last pointer position
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
+  // Save the pointer position relative to the image
+  // Keep it fixed for the duration of the drag
+  dragOffsetX = event.clientX - cropper.imageX;
+  dragOffsetY = event.clientY + cropper.imageY;
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -212,20 +214,25 @@ function onPointerMove(event: PointerEvent): void {
   if (interactionsLocked.value) return;
   if (dragPointerId.value === null || event.pointerId !== dragPointerId.value) return;
 
-  // DOM +y is down; crop space +y is up — flip the vertical delta.
-  const deltaX = event.clientX - lastPointerX;
-  const deltaY = -(event.clientY - lastPointerY);
-  cropper.panBy(deltaX, deltaY);
-
-  // Update last pointer position
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
+  // Calculate the relative movement and pan the image by that amount
+  // panBy clamps it to stay within the image bounds
+  const targetX = event.clientX - dragOffsetX;
+  const targetY = dragOffsetY - event.clientY;
+  cropper.panBy(targetX - cropper.imageX, targetY - cropper.imageY);
 }
 
 function endPointerDrag(event?: PointerEvent): void {
+  // Ignore other pointer movements than the one that started the drag
   if (event && dragPointerId.value !== null && event.pointerId !== dragPointerId.value) {
     return;
   }
+
+  // If no pointer id is set, ignore the event
+  if (dragPointerId.value === null) {
+    return;
+  }
+
+  viewportRef.value?.releasePointerCapture(dragPointerId.value);
   dragPointerId.value = null;
 }
 
@@ -234,10 +241,6 @@ function onPointerUp(event: PointerEvent): void {
 }
 
 function onPointerCancel(event: PointerEvent): void {
-  endPointerDrag(event);
-}
-
-function onPointerLeave(event: PointerEvent): void {
   endPointerDrag(event);
 }
 
@@ -356,7 +359,6 @@ defineExpose({
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
-    @pointerleave="onPointerLeave"
     @wheel="onWheel"
     @keydown="onViewportKeydown"
   >
