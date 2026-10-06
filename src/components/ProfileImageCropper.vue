@@ -185,8 +185,8 @@ onBeforeUnmount(() => {
  * Tracks the pointer and positions for dragging the image
  */
 const dragPointerId = ref<number | null>(null);
-let lastPointerX = 0;
-let lastPointerY = 0;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
 
 const interactionsLocked = computed(() => loading.value || props.disabled);
 
@@ -203,9 +203,10 @@ function onPointerDown(event: PointerEvent): void {
   dragPointerId.value = event.pointerId;
   viewportRef.value?.setPointerCapture(event.pointerId);
 
-  // Update last pointer position
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
+  // Save the pointer position relative to the image
+  // Keep it fixed for the duration of the drag
+  dragOffsetX = event.clientX - cropper.imageX;
+  dragOffsetY = event.clientY + cropper.imageY;
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -213,14 +214,11 @@ function onPointerMove(event: PointerEvent): void {
   if (interactionsLocked.value) return;
   if (dragPointerId.value === null || event.pointerId !== dragPointerId.value) return;
 
-  // DOM +y is down; crop space +y is up — flip the vertical delta.
-  const deltaX = event.clientX - lastPointerX;
-  const deltaY = -(event.clientY - lastPointerY);
-  cropper.panBy(deltaX, deltaY);
-
-  // Update last pointer position
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
+  // Calculate the relative movement and pan the image by that amount
+  // panBy clamps it to stay within the image bounds
+  const targetX = event.clientX - dragOffsetX;
+  const targetY = dragOffsetY - event.clientY;
+  cropper.panBy(targetX - cropper.imageX, targetY - cropper.imageY);
 }
 
 function endPointerDrag(event?: PointerEvent): void {
