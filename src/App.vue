@@ -97,8 +97,8 @@ function onCrop(result: CropResult): void {
   statusMessage.value = `Cropped image (${result.blob.type}, ${result.blob.size} bytes).`;
 }
 
-function onError(message: string): void {
-  errorMessage.value = message;
+function onError(message: Error): void {
+  errorMessage.value = message.message;
   statusMessage.value = '';
 }
 

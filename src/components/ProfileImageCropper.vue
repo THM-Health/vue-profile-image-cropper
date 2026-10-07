@@ -66,7 +66,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   loading: [loading: boolean];
-  error: [message: string];
+  error: [error: Error];
   /** Fired when the crop square moves on the image (0 = left/top, 100 = right/bottom). */
   position: [position: CropSquarePosition];
 }>();
@@ -122,11 +122,12 @@ watch(
 
 /**
  * Emits the crop position to the parent component.
+ * Also watches `loading` so the initial position emits once loading clears after measureViewport.
  */
 watch(
-  () => cropper.getRelativeCropSquarePosition(),
-  (position) => {
-    if (loading.value || !cropper.viewportWidth || !cropper.viewportHeight) {
+  [loading, () => cropper.getRelativeCropSquarePosition()],
+  ([isLoading, position]) => {
+    if (isLoading || !cropper.viewportWidth || !cropper.viewportHeight) {
       return;
     }
     emit('position', { x: position.x, y: position.y });
@@ -156,10 +157,10 @@ onMounted(async () => {
   try {
     await cropper.loadImage(props.image);
     cropper.setZoom(zoom.value);
-    loading.value = false;
 
     await nextTick();
     measureViewport();
+    loading.value = false;
 
     // If browser supports ResizeObserver, use it to react to viewport size changes
     // Otherwise, use window resize event to react to viewport size changes
@@ -169,9 +170,9 @@ onMounted(async () => {
     } else {
       window.addEventListener('resize', measureViewport);
     }
-  } catch {
+  } catch (error: unknown) {
     loading.value = false;
-    emit('error', 'Failed to load image.');
+    emit('error', error instanceof Error ? error : new Error('Failed to load image.'));
   }
 });
 
@@ -312,22 +313,11 @@ function onViewportKeydown(event: KeyboardEvent): void {
  * API for cropping the image and returning the cropped image as a Blob.
  */
 async function cropImage(): Promise<CropResult | null> {
-  if (loading.value) {
-    emit('error', 'Image is not ready to crop.');
-    return null;
-  }
-
-  try {
-    const result = await cropper.cropImage({
-      outputSize: props.outputSize,
-      mimeType: props.mimeType,
-      quality: props.quality,
-    });
-    return result;
-  } catch {
-    emit('error', 'Failed to export the cropped image.');
-    return null;
-  }
+  return await cropper.cropImage({
+    outputSize: props.outputSize,
+    mimeType: props.mimeType,
+    quality: props.quality,
+  });
 }
 
 defineExpose({

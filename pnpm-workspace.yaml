@@ -2,3 +2,4 @@ allowBuilds:
   canvas: true
   cypress: true
 minimumReleaseAge: 10080 # 7 days
+packages: []

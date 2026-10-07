@@ -119,7 +119,13 @@ export class ImageCropper {
   async loadImage(image: File | HTMLImageElement): Promise<void> {
     this.destroy();
 
-    const bitmap = await createImageBitmap(image, { imageOrientation: 'from-image' });
+    let bitmap: ImageBitmap | null = null;
+    try {
+      bitmap = await createImageBitmap(image, { imageOrientation: 'from-image' });
+    } catch {
+      throw new Error('Failed to create image bitmap.');
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
