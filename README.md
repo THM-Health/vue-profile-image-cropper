@@ -82,27 +82,27 @@ function onLoading(loading: boolean) {
 
 ### Props
 
-| Name           | Type      | Default        | Required | Description                                                                                |
-| -------------- | --------- | -------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `image`        | `File`    | —              | yes      | Source image. Fixed for the component lifetime — remount (e.g. `:key`) to load a new file. |
-| `zoom`         | `number`  | —              | yes      | Zoom multiplier via `v-model:zoom` (typically `≥ 1`).                                      |
-| `minZoom`      | `number`  | `1`            | no       | Lower bound for wheel / `+` `−` zoom.                                                      |
-| `maxZoom`      | `number`  | `Infinity`     | no       | Upper bound for wheel / `+` `−` zoom.                                                      |
-| `zoomStep`     | `number`  | `0.1`          | no       | Zoom delta per wheel tick or `+` / `−` key.                                                |
-| `outputSize`   | `number`  | `512`          | no       | Edge length in pixels of the exported square image.                                        |
-| `mimeType`     | `string`  | `'image/jpeg'` | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
-| `quality`      | `number`  | `0.92`         | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
-| `keyboardStep` | `number`  | `8`            | no       | Arrow-key move distance in CSS pixels.                                                     |
-| `disabled`     | `boolean` | `false`        | no       | Disables pointer, wheel, and keyboard interactions on the viewport.                        |
-| `maskClass`    | `string`  | —              | no       | Class(es) on the crop-square mask.                                                         |
-| `ringClass`    | `string`  | —              | no       | Class(es) on the crop-square outline.                                                      |
+| Name           | Type                     | Default        | Required | Description                                                                                |
+| -------------- | ------------------------ | -------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `image`        | `File\|HTMLImageElement` | —              | yes      | Source image. Fixed for the component lifetime — remount (e.g. `:key`) to load a new file. |
+| `zoom`         | `number`                 | —              | yes      | Zoom multiplier via `v-model:zoom` (typically `≥ 1`).                                      |
+| `minZoom`      | `number`                 | `1`            | no       | Lower bound for wheel / `+` `−` zoom.                                                      |
+| `maxZoom`      | `number`                 | `Infinity`     | no       | Upper bound for wheel / `+` `−` zoom.                                                      |
+| `zoomStep`     | `number`                 | `0.1`          | no       | Zoom delta per wheel tick or `+` / `−` key.                                                |
+| `outputSize`   | `number`                 | `512`          | no       | Edge length in pixels of the exported square image.                                        |
+| `mimeType`     | `string`                 | `'image/jpeg'` | no       | MIME type used for canvas export (`image/jpeg`, `image/png`, `image/webp`).                |
+| `quality`      | `number`                 | `0.92`         | no       | Encoder quality for JPEG/WebP (`0`–`1`). Ignored for PNG.                                  |
+| `keyboardStep` | `number`                 | `8`            | no       | Arrow-key move distance in CSS pixels.                                                     |
+| `disabled`     | `boolean`                | `false`        | no       | Disables pointer, wheel, and keyboard interactions on the viewport.                        |
+| `maskClass`    | `string`                 | —              | no       | Class(es) on the crop-square mask.                                                         |
+| `ringClass`    | `string`                 | —              | no       | Class(es) on the crop-square outline.                                                      |
 
 ### Events
 
 | Name       | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `loading`  | `boolean`            | Fired when decode/load state changes (`true` while loading, then `false`).                                                                                                                                                                                                                                                                                                                                      |
-| `error`    | `string`             | Fired when loading or cropping fails; payload is an error message.                                                                                                                                                                                                                                                                                                                                              |
+| `error`    | `Error`              | Fired when loading fails                                                                                                                                                                                                                                                                                                                                                                                        |
 | `position` | `CropSquarePosition` | Relative position of the crop square on the image (`x`/`y` 0–100, or `null` if that axis cannot pan, as it covers the whole image width or height). x=0: Crop square is at the left edge of the image, x=100: Crop square is at the right edge; y=0: Crop square is at the top of the image, y=100: Crop square is at the bottom of the image. Can be used to announce the position for assistive technologies. |
 
 ### Exposed methods

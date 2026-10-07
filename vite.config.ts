@@ -59,6 +59,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'happy-dom',
+      setupFiles: ['./src/test/setupHappyDomCanvas.ts'],
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       coverage: {
         provider: 'v8',

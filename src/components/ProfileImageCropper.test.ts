@@ -1,49 +1,31 @@
 /**
  * Component tests for ProfileImageCropper.
- * Image decoding / canvas are mocked; focus is mount, export, and keyboard pan.
  */
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mount, type VueWrapper } from '@vue/test-utils';
+import { describe, expect, it } from 'vitest';
+import { imageSize } from 'image-size';
 import { nextTick } from 'vue';
 import ProfileImageCropper from './ProfileImageCropper.vue';
 
-/** Minimal valid 1×1 PNG (pixel size is overridden by createImageBitmap mock). */
-const TINY_PNG = Uint8Array.from(
-  atob(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  ),
-  (char) => char.charCodeAt(0),
-);
+const SQUARE_IMAGE = 'profile.png';
+const LANDSCAPE_IMAGE = 'profile-landscape.png';
+const PORTRAIT_IMAGE = 'profile-portrait.png';
 
-function createImageFile(name = 'portrait.png'): File {
-  return new File([TINY_PNG], name, { type: 'image/png' });
-}
-
-/** Stub bitmap decode + canvas so tests do not depend on real image decoding. */
-function mockImagePipeline(width = 120, height = 180): void {
-  vi.stubGlobal(
-    'createImageBitmap',
-    vi.fn(async () => ({
-      width,
-      height,
-      close: vi.fn(),
-    })),
+async function createImageFile(fixture: string): Promise<HTMLImageElement> {
+  const bytes = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), `../../cypress/fixtures/${fixture}`),
   );
+  const dataUrl = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
 
-  HTMLCanvasElement.prototype.getContext = vi.fn(() => {
-    return {
-      imageSmoothingEnabled: true,
-      imageSmoothingQuality: 'high',
-      fillStyle: '',
-      clearRect: vi.fn(),
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
-    } as unknown as CanvasRenderingContext2D;
-  }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-  HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string) {
-    callback(new Blob(['cropped'], { type: type ?? 'image/jpeg' }));
-  };
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to decode fixture image.'));
+    image.src = dataUrl;
+  });
 }
 
 type CropperExpose = {
@@ -54,10 +36,12 @@ async function mountCropper(
   props: Record<string, unknown> = {},
   viewportSize = { width: 200, height: 200 },
   attrs: Record<string, unknown> = {},
+  fixture: string = SQUARE_IMAGE,
+  waitUntilReady: boolean = true,
 ): Promise<VueWrapper> {
   const wrapper = mount(ProfileImageCropper, {
     props: {
-      image: createImageFile(),
+      image: await createImageFile(fixture),
       zoom: 1,
       ...props,
     },
@@ -75,21 +59,16 @@ async function mountCropper(
     value: viewportSize.height,
   });
 
-  await flushPromises();
-  await nextTick();
+  if (waitUntilReady) {
+    while (wrapper.emitted('loading')?.at(-1)?.[0] !== false) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
   return wrapper;
 }
 
 describe('ProfileImageCropper', () => {
-  beforeEach(() => {
-    mockImagePipeline();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
   it('renders the viewport, preview image, and finishes loading', async () => {
     const wrapper = await mountCropper({}, { width: 200, height: 200 }, { class: 'test-viewport' });
     const viewport = wrapper.get('[role="application"]');
@@ -98,6 +77,14 @@ describe('ProfileImageCropper', () => {
     expect(wrapper.find('img').exists()).toBe(true);
     expect(wrapper.emitted('loading')?.at(-1)?.[0]).toBe(false);
 
+    wrapper.unmount();
+  });
+
+  it('emits error when image fails to load', async () => {
+    const wrapper = await mountCropper({ image: new Image() });
+    const error = wrapper.emitted('error')?.at(-1)?.[0] as Error;
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe('Failed to create image bitmap.');
     wrapper.unmount();
   });
 
@@ -113,12 +100,120 @@ describe('ProfileImageCropper', () => {
     expect(result?.blob).toBeInstanceOf(Blob);
     expect(result?.blob.type).toBe('image/png');
 
+    const dimensions = imageSize(new Uint8Array(await result!.blob.arrayBuffer()));
+    expect(dimensions.width).toBe(64);
+    expect(dimensions.height).toBe(64);
+
     wrapper.unmount();
   });
 
+  it('throws error when cropImage() is called before cropper is ready', async () => {
+    const wrapper = await mountCropper(
+      {
+        outputSize: 64,
+        mimeType: 'image/png',
+      },
+      { width: 0, height: 100 },
+      { class: 'test-viewport' },
+      SQUARE_IMAGE,
+      false,
+    );
+
+    const cropExpose = wrapper.vm as unknown as CropperExpose;
+
+    await expect(cropExpose.cropImage()).rejects.toThrow('Image is not ready to crop.');
+
+    wrapper.unmount();
+  });
+
+  it('throws error when cropImage() is not ready due to viewport width = 0', async () => {
+    const wrapper = await mountCropper(
+      {
+        outputSize: 64,
+        mimeType: 'image/png',
+      },
+      { width: 0, height: 100 },
+      { class: 'test-viewport' },
+    );
+
+    const cropExpose = wrapper.vm as unknown as CropperExpose;
+
+    await expect(cropExpose.cropImage()).rejects.toThrow('Image is not ready to crop.');
+
+    wrapper.unmount();
+  });
+
+  it('throws error when cropImage() is not ready due to viewport height = 0', async () => {
+    const wrapper = await mountCropper(
+      {
+        outputSize: 64,
+        mimeType: 'image/png',
+      },
+      { width: 100, height: 0 },
+      { class: 'test-viewport' },
+    );
+
+    const cropExpose = wrapper.vm as unknown as CropperExpose;
+
+    await expect(cropExpose.cropImage()).rejects.toThrow('Image is not ready to crop.');
+
+    wrapper.unmount();
+  });
+
+  describe('emits position', () => {
+    it('emits null on axes that cannot pan', async () => {
+      const square = await mountCropper({ zoom: 1 });
+      expect(square.emitted('position')?.at(-1)?.[0]).toEqual({ x: null, y: null });
+      square.unmount();
+
+      const landscape = await mountCropper(
+        { zoom: 1 },
+        { width: 200, height: 200 },
+        {},
+        LANDSCAPE_IMAGE,
+      );
+      expect(landscape.emitted('position')?.at(-1)?.[0]).toEqual({ x: 50, y: null });
+      landscape.unmount();
+
+      const portrait = await mountCropper(
+        { zoom: 1 },
+        { width: 200, height: 200 },
+        {},
+        PORTRAIT_IMAGE,
+      );
+      expect(portrait.emitted('position')?.at(-1)?.[0]).toEqual({ x: null, y: 50 });
+      portrait.unmount();
+    });
+
+    it('updates position when zooming and panning', async () => {
+      const wrapper = await mountCropper({
+        zoom: 1,
+        keyboardStep: 10,
+        minZoom: 1,
+        maxZoom: 3,
+        zoomStep: 1,
+      });
+      const viewport = wrapper.get('[role="application"]');
+
+      expect(wrapper.emitted('position')?.at(-1)?.[0]).toEqual({ x: null, y: null });
+
+      await viewport.trigger('wheel', { deltaY: -100 });
+      await wrapper.setProps({ zoom: 2 });
+      await nextTick();
+      expect(wrapper.emitted('position')?.at(-1)?.[0]).toEqual({ x: 50, y: 50 });
+
+      await viewport.trigger('keydown', { key: 'ArrowLeft' });
+      await viewport.trigger('keydown', { key: 'ArrowLeft' });
+      await viewport.trigger('keydown', { key: 'ArrowUp' });
+      await nextTick();
+      expect(wrapper.emitted('position')?.at(-1)?.[0]).toEqual({ x: 40, y: 45 });
+
+      wrapper.unmount();
+    });
+  });
+
   it('pans the image layer when arrow keys are pressed', async () => {
-    // Default mock is a portrait source → vertical pan is available at zoom 1
-    const wrapper = await mountCropper({ keyboardStep: 10 });
+    const wrapper = await mountCropper({ zoom: 2, keyboardStep: 10 });
 
     const viewport = wrapper.get('[role="application"]');
     const layer = wrapper.get('img[style*="will-change"]').element as HTMLElement;
