@@ -62,7 +62,7 @@
     "@vue/test-utils": "^2.5.1",
     "@vue/tsconfig": "^0.9.1",
     "canvas": "^3.2.3",
-    "cypress": "^15.21.1",
+    "cypress": "^16.1.1",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.11.1",
