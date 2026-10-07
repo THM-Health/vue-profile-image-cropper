@@ -126,7 +126,7 @@ describe('ProfileImageCropper', () => {
     wrapper.unmount();
   });
 
-  it('emits error when cropImage() is not ready due to viewport width = 0', async () => {
+  it('throws error when cropImage() is not ready due to viewport width = 0', async () => {
     const wrapper = await mountCropper(
       {
         outputSize: 64,
@@ -143,7 +143,7 @@ describe('ProfileImageCropper', () => {
     wrapper.unmount();
   });
 
-  it('emits error when cropImage() is not ready due to viewport height = 0', async () => {
+  it('throws error when cropImage() is not ready due to viewport height = 0', async () => {
     const wrapper = await mountCropper(
       {
         outputSize: 64,
